@@ -10,3 +10,7 @@
 	path = dentalcraft-aligners
 	url = ../dentalcraft-aligners.git
 	branch = main
+[submodule "dentalcraft-web"]
+	path = dentalcraft-web
+	url = ../dentalcraft-web.git
+	branch = main
