@@ -12,6 +12,14 @@ This rule overrides "Versioning workflow" and "CI notes" below.
 - Keep the local quality gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`) for the crates you touch.
 - When the user ends this mode, push the branches and run the normal release flow.
 
+## Requirement: agent-drivable (CLI + MCP, like the ArtCraft apps)
+
+DentalCraft must ship `dentalcraft-cli` and an MCP server (`dentalcraft-cli mcp`) so that AI agents can drive everything:
+- Every user action is a registered command with an id, a params schema and docs.
+- Modes: a headless in-process engine session, or bridge mode where the app runs with `--control <port>` and the CLI uses `mcp --connect <port>`.
+- MCP tools: list/describe/execute/batch commands, inspect state, render, open/save, undo/redo.
+- New features are not done until they are reachable as commands from the CLI/MCP.
+
 ## What this is
 
 DentalCraft is a desktop application for digital dentistry, written in Rust. It replaces the Blender add-on at `REDACTED-PATH`, which stays read-only and is the oracle for algorithms and regulatory documents. Decision: [`docs/adr/0001-full-rewrite-in-rust.md`](docs/adr/0001-full-rewrite-in-rust.md). Plan: `docs/plan/PLAN.md`; `docs/plan/DECISIONS.md` overrides it.
