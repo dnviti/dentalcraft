@@ -1,0 +1,12 @@
+[submodule "dentalcraft-core"]
+	path = dentalcraft-core
+	url = ../dentalcraft-core.git
+	branch = main
+[submodule "dentalcraft-app"]
+	path = dentalcraft-app
+	url = ../dentalcraft-app.git
+	branch = main
+[submodule "dentalcraft-aligners"]
+	path = dentalcraft-aligners
+	url = ../dentalcraft-aligners.git
+	branch = main

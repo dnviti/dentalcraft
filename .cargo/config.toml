@@ -1,0 +1,19 @@
+# Used only for builds started from inside this superproject.
+# Standalone builds of a submodule (CI) do not read it.
+
+[net]
+# Private git dependencies are fetched with the git CLI so that the SSH agent
+# and the credential helpers are honoured.
+git-fetch-with-cli = true
+
+# TODO: local path overrides. Once the crate names of dentalcraft-core and
+# dentalcraft-aligners are defined, add one entry per crate so that builds in
+# the superproject use the working trees instead of the pinned git revisions:
+#
+# [patch."https://github.com/dnviti-personal-org/dentalcraft-core.git"]
+# dc-mesh = { path = "dentalcraft-core/crates/dc-mesh" }
+# ...
+#
+# [patch."https://github.com/dnviti-personal-org/dentalcraft-aligners.git"]
+# dca-model = { path = "dentalcraft-aligners/crates/dca-model" }
+# ...

@@ -1,0 +1,46 @@
+name: Verify submodules
+
+# Lightweight check without secrets: the URLs in .gitmodules are relative
+# (../<repo>.git, so they work for anyone with access) and every entry of
+# .gitmodules matches a submodule registered in the index.
+# It does not clone the submodules: the default GITHUB_TOKEN cannot read other
+# private repositories of the organization.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  submodules:
+    runs-on: golgari-dev
+    steps:
+      - name: Checkout (without submodules)
+        uses: actions/checkout@v7
+
+      - name: Relative URLs and branch main
+        run: |
+          set -eu
+          names=$(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.path$' | sed -e 's/^submodule\.//' -e 's/\.path$//')
+          test -n "$names"
+          for n in $names; do
+            url=$(git config -f .gitmodules "submodule.$n.url")
+            branch=$(git config -f .gitmodules "submodule.$n.branch" || true)
+            case "$url" in
+              ../*.git) ;;
+              *) echo "non-relative URL for $n: $url" >&2; exit 1 ;;
+            esac
+            test "$branch" = "main" || { echo "branch is not main for $n: '$branch'" >&2; exit 1; }
+            echo "ok: $n -> $url ($branch)"
+          done
+
+      - name: Every submodule is registered in the index
+        run: |
+          set -eu
+          for p in $(git config -f .gitmodules --get-regexp '\.path$' | awk '{print $2}'); do
+            mode=$(git ls-files -s -- "$p" | awk '{print $1}')
+            test "$mode" = "160000" || { echo "$p is not a submodule (gitlink) in the index" >&2; exit 1; }
+            echo "ok: $p"
+          done
