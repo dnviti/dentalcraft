@@ -2,6 +2,16 @@
 
 Guidance for AI agents working in this repository. Read `README.md` and `docs/plan/HANDOFF.md` first.
 
+## Current mode: local-only, speed first (from 2026-10-31, until the user revokes it)
+
+This rule overrides "Versioning workflow" and "CI notes" below.
+
+- Do all work locally, git included: commit on local branches (or local `main`). Never `git push`, never open PRs, never trigger or wait for CI, and never tag or cut releases.
+- Build and test locally only, inside the superproject, so the `.cargo/config.toml` `[patch]` uses the submodule working trees. No tag bumps between repos. Run `git checkout -- Cargo.lock` in a submodule before committing it.
+- Priority: finish the features that make up the application by porting them from the Blender plugin `REDACTED-PATH`. That repo is read-only and is the oracle.
+- Keep the local quality gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`) for the crates you touch.
+- When the user ends this mode, push the branches and run the normal release flow.
+
 ## What this is
 
 DentalCraft is a desktop application for digital dentistry, written in Rust. It replaces the Blender add-on at `REDACTED-PATH`, which stays read-only and is the oracle for algorithms and regulatory documents. Decision: [`docs/adr/0001-full-rewrite-in-rust.md`](docs/adr/0001-full-rewrite-in-rust.md). Plan: `docs/plan/PLAN.md`; `docs/plan/DECISIONS.md` overrides it.
