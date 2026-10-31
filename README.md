@@ -4,6 +4,29 @@
 
 This repository holds no application code and is not versioned. It collects the project as **git submodules**, together with the plan, the decisions and the cross-cutting documentation.
 
+## Status
+
+| Repository | Release | State |
+| --- | --- | --- |
+| `dentalcraft-core` | v0.2.1 | Engine crates, `.dcprj` container, module API (select hook, `ModuleCodec`), case model. |
+| `dentalcraft-aligners` | v0.1.0 | *Aligners* module: data model, menu and inspector, en/it translations. Algorithms are still stubs. |
+| `dentalcraft-app` | v0.1.0 | Desktop shell: sign-in, home, new project, workspace with viewport, support, en/it. |
+| `dentalcraft-server` | v0.1.0 | OpenID Connect identity provider (dev mode available). |
+
+Design deliverables are in [`docs/design/`](docs/design) (FigCraft file, tokens, UI spec, screen exports); screenshots of the running app are in [`docs/screenshots/`](docs/screenshots).
+
+## Run
+
+```sh
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Application (from this folder the local submodule trees are used, see "Local builds")
+cd dentalcraft-app && cargo run -p dc-app --release
+
+# Development auth server (separate terminal)
+REDACTED
+```
+
 ## Repositories
 
 | Folder | Repository | Language | Role |
@@ -19,6 +42,8 @@ Other folders:
 | --- | --- |
 | [`docs/plan/`](docs/plan) | Implementation plan (`PLAN.md`) and decisions that override it (`DECISIONS.md`). |
 | [`docs/adr/`](docs/adr) | Architecture decision records. |
+| [`docs/design/`](docs/design) | Design deliverables: `dentalcraft.figcraft`, `tokens.json`, `ui-spec.md`, `screens/`. |
+| [`docs/screenshots/`](docs/screenshots) | Screenshots of the running application. |
 | [`.cargo/config.toml`](.cargo/config.toml) | Cargo settings for builds started from this folder, including local `[patch]` overrides. |
 
 All repositories are private and live in the `dnviti-personal-org` organization.
@@ -47,16 +72,16 @@ git submodule update --remote --merge
 
 # Record the new pointers in this repository
 git add dentalcraft-core dentalcraft-aligners dentalcraft-app dentalcraft-server
-git commit -m "chore(submodule): bump dentalcraft-core to v0.2.0"
+git commit -m "chore(submodule): dentalcraft-core a v0.2.1"
 ```
 
 Pointer bumps are manual and use the `chore(submodule): ...` prefix. Releases are cut inside each submodule by release-please (tags `vX.Y.Z`); this repository has no version.
 
 ## Local builds and `[patch]`
 
-`dentalcraft-aligners` and `dentalcraft-app` depend on the other repositories through git dependencies (`https://github.com/dnviti-personal-org/dentalcraft-core.git`, by tag, or `branch = "main"` before core v0.1.0). In CI each repository builds against those pinned revisions.
+`dentalcraft-aligners` and `dentalcraft-app` depend on the other repositories through git dependencies (`https://github.com/dnviti-personal-org/dentalcraft-core.git` and `.../dentalcraft-aligners.git`, by tag). In CI each repository builds against those pinned revisions.
 
-For local work, the `[patch]` tables in [`.cargo/config.toml`](.cargo/config.toml) redirect those git dependencies to the working trees of the submodules, so changes in core are picked up by aligners and app without publishing anything. The config applies only to builds started from this folder, not inside a submodule checked out on its own. The tables are still a TODO until the crate names are final. Because `net.git-fetch-with-cli` is enabled, git dependencies are fetched with the git CLI and your SSH agent or credential helper.
+For local work, the `[patch]` tables in [`.cargo/config.toml`](.cargo/config.toml) redirect those git dependencies to the working trees of the submodules, so changes in core are picked up by aligners and app without publishing anything. The config applies only to builds started from this folder, not inside a submodule checked out on its own. Cargo rewrites the `Cargo.lock` of a submodule when it is built from here (patched crates get path sources): do not commit that lock, run `git checkout Cargo.lock` in the submodule first. Because `net.git-fetch-with-cli` is enabled, git dependencies are fetched with the git CLI and your SSH agent or credential helper.
 
 Toolchain: Rust 1.99.1 (`rust-toolchain.toml` in each Rust repository), Go as declared in `dentalcraft-server/go.mod`.
 
