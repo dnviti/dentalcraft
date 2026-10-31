@@ -6,14 +6,21 @@
 # and the credential helpers are honoured.
 git-fetch-with-cli = true
 
-# TODO: local path overrides. Once the crate names of dentalcraft-core and
-# dentalcraft-aligners are defined, add one entry per crate so that builds in
-# the superproject use the working trees instead of the pinned git revisions:
-#
-# [patch."https://github.com/dnviti-personal-org/dentalcraft-core.git"]
-# dc-mesh = { path = "dentalcraft-core/crates/dc-mesh" }
-# ...
-#
-# [patch."https://github.com/dnviti-personal-org/dentalcraft-aligners.git"]
-# dca-model = { path = "dentalcraft-aligners/crates/dca-model" }
-# ...
+# Local path overrides: builds inside the superproject use the working trees of
+# the submodules instead of the git revisions pinned by the consumers.
+[patch."https://github.com/dnviti-personal-org/dentalcraft-core.git"]
+dc-mesh = { path = "dentalcraft-core/crates/dc-mesh" }
+dc-geom = { path = "dentalcraft-core/crates/dc-geom" }
+dc-case = { path = "dentalcraft-core/crates/dc-case" }
+dc-command = { path = "dentalcraft-core/crates/dc-command" }
+dc-jobs = { path = "dentalcraft-core/crates/dc-jobs" }
+dc-scene = { path = "dentalcraft-core/crates/dc-scene" }
+dc-project = { path = "dentalcraft-core/crates/dc-project" }
+dc-module-api = { path = "dentalcraft-core/crates/dc-module-api" }
+dc-i18n = { path = "dentalcraft-core/crates/dc-i18n" }
+dc-theme = { path = "dentalcraft-core/crates/dc-theme" }
+
+[patch."https://github.com/dnviti-personal-org/dentalcraft-aligners.git"]
+dca-model = { path = "dentalcraft-aligners/crates/dca-model" }
+dca-algo = { path = "dentalcraft-aligners/crates/dca-algo" }
+dca-module = { path = "dentalcraft-aligners/crates/dca-module" }
