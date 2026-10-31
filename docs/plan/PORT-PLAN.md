@@ -57,6 +57,8 @@ Not ported: GPU kernels, engine*, export_worker (rayon replaces it), jev, livete
 
 Vertical slice (end of B3): import STL → frame/autoseed → segmentation → teeth → diagnosis → setup → staging → per-stage models + CSV + ICS, through `aligners.auto` in the app and the CLI.
 
+- **B6** (after the final release build, requested 2026-10-31): automatic orthodontic study model trimming ("squadratura dello zoccolo ortodontico") on the 3D model. European and American (ABO) styles, chosen by the user in settings. Exposed as commands (CLI/MCP), with a menu leaf and en/it strings.
+
 ## Risks and libraries
 - Risks: SDF speed and memory (sparse blocks are required), reproducing segmentation's deterministic CG, `reconstruct.close_crown` heuristics, trim (about 4450 lines), autoseed DP, manifold-safe QEM.
 - Use: kiddo, nalgebra, schemars, clap, png, ttf-parser (+ lyon or i_overlay); faer optional.

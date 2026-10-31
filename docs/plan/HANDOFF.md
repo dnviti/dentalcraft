@@ -1,5 +1,7 @@
 # Handoff, 2026-10-31
 
+> Superseded for current state by [`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md) (port B0 to B6, agent control, website). The wave 1 notes below are kept for history.
+
 State at the end of day 1, and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md).
 
 ## Pinned versions
