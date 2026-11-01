@@ -76,7 +76,7 @@ Building inside the superproject rewrites the submodule `Cargo.lock` with path s
 4. Merge the release-please PR; it tags `vX.Y.Z` and updates the changelog.
 5. Consumers move to the new tag; then bump the pointers here with a commit `chore(submodule): <repo> a vX.Y.Z` (manual, see README).
 
-Internal path dependencies must not carry a `version =` requirement (release-please would rewrite them and break the build). Release type: `rust` for Rust repos, `go` for the server; tags have no component prefix.
+Internal path dependencies must not carry a `version =` requirement (release-please would rewrite them and break the build). Release type: `simple` for Rust repos, `go` for the server; tags have no component prefix.
 
 ## CI notes
 
