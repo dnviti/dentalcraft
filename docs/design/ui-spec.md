@@ -77,7 +77,7 @@ Measurements:
 | Status bar | 28 tall, full width |
 
 - Top bar: logo tile (back to Home), module chip (`AL` + "Aligners"), project name + extension, unsaved dot + text; spacer; Undo / Redo (ghost, Redo disabled when stack empty), primary Save, divider, Help, avatar.
-- Left menu: filter field (32, `/` shortcut) then the tree (section 6). Footer: workflow progress (`14/37` mono + success bar).
+- Left menu: filter field (32, `/` shortcut) then the tree (section 6). Footer: workflow progress (`3/8` mono + success bar: the steps done out of the eight steps of the workflow, section 6).
 - Viewport overlays (absolute, 16 pt inset): toolbar (views Occlusal/Front/Left/Right/Back as text segments; display Solid / Transparent / Wireframe; Measure, Angle, Section; layer toggles Attachments, IPR, Target), tooltip pattern (label + mono shortcut), view-info pill, **view cube** 100 x 100 top-right, tooth callout with leader (selected tooth 13: buccal, rotation, remaining), legend bottom-left (shape + label for selected tooth, final position, attachment, IPR), scale bar bottom-right (10 mm). IPR values in mono magenta-bordered tags.
 - 3D colours: enamel `model/enamel` with `model/enamel-shade` 1.5 pt outline; gingiva `model/gingiva` (palate at 45 % opacity); selected tooth 3 pt `select/blue` outline; target (setup) positions dashed `text/primary` at 70 %; attachments `model/attachment`; IPR planes `model/ipr`.
 - Timeline: transport (first, previous, play, next, last; 36 pt), stage readout (`Stage 09 of 14, week 18`, mono 20 Bold), jaw toggles + "Overlay stage 0"; stage cells row 0..14 (each fill width, bar 20 tall radius 3): past = `bg/hover` + strong border, current = `select/blue` fill + bold number, future = `bg/sunken`, over-limit stage = warning outline + warning glyph. Event markers above cells: attachment (square, teal), IPR (diamond, magenta), warning (triangle).
@@ -106,60 +106,54 @@ Colour tokens (dark and light panels), type scale, spacing, radii, elevation, co
 
 ## 6. Aligners left menu tree (i18n)
 
-Group rows show `done/total` in mono; items show status (done / current / to do / locked). Sub-items are tools or modes inside a step.
+The menu is for the dentist and the technician: six groups and 19 commands (leaves), two levels, plus one closed sub-group. Wording is plain, with no name of an algorithm. The other commands of the module (the single stages, the settings) are reached from the CLI and the MCP server only. A leaf is the command `aligners.<path>`; its Fluent keys are `aligners-menu-<path>` (label) and `aligners-desc-<path>` (description in the inspector), the dots turned into hyphens.
 
-| Level | i18n key | English | Italiano |
-|---|---|---|---|
-| 1 | `aligners.menu.case` | Case | Caso |
-| 2 | `aligners.menu.case.import_scans` | Import scans | Importa scansioni |
-| 2 | `aligners.menu.case.units_orientation` | Units & orientation | Unità e orientamento |
-| 2 | `aligners.menu.case.case_info` | Case info | Dati del caso |
-| 1 | `aligners.menu.preparation` | Preparation | Preparazione |
-| 2 | `aligners.menu.preparation.auto_orientation` | Auto orientation & arch | Orientamento e arcata automatici |
-| 2 | `aligners.menu.preparation.tooth_numbering` | Tooth numbering (FDI) | Numerazione denti (FDI) |
-| 2 | `aligners.menu.preparation.segmentation` | Segmentation | Segmentazione |
-| 3 | `aligners.menu.preparation.segmentation.auto` | Auto segmentation | Segmentazione automatica |
-| 3 | `aligners.menu.preparation.segmentation.manual_brush` | Manual brush | Pennello manuale |
-| 2 | `aligners.menu.preparation.tooth_reconstruction` | Tooth reconstruction | Ricostruzione dentale |
-| 2 | `aligners.menu.preparation.gingiva` | Gingiva | Gengiva |
-| 1 | `aligners.menu.diagnosis` | Diagnosis | Diagnosi |
-| 2 | `aligners.menu.diagnosis.space_analysis` | Space analysis | Analisi dello spazio |
-| 2 | `aligners.menu.diagnosis.little_index` | Little irregularity index | Indice di irregolarità di Little |
-| 2 | `aligners.menu.diagnosis.bolton` | Bolton | Bolton |
-| 2 | `aligners.menu.diagnosis.complexity_score` | Complexity score | Punteggio di complessità |
-| 1 | `aligners.menu.planning` | Planning | Pianificazione |
-| 2 | `aligners.menu.planning.setup` | Setup (final position) | Setup (posizione finale) |
-| 2 | `aligners.menu.planning.tooth_movements` | Per-tooth movements (6-DOF) | Movimenti per dente (6 gradi) |
-| 2 | `aligners.menu.planning.staging` | Staging | Stadiazione |
-| 2 | `aligners.menu.planning.ipr` | IPR | IPR |
-| 2 | `aligners.menu.planning.attachments` | Attachments | Attacchi |
-| 2 | `aligners.menu.planning.schedule` | Schedule | Calendario |
-| 1 | `aligners.menu.occlusion` | Occlusion | Occlusione |
-| 2 | `aligners.menu.occlusion.virtual_bite` | Virtual bite | Occlusione virtuale |
-| 2 | `aligners.menu.occlusion.bite_registration` | Bite registration (ICP) | Registrazione del morso (ICP) |
-| 2 | `aligners.menu.occlusion.contact_map` | Contact map | Mappa dei contatti |
-| 2 | `aligners.menu.occlusion.bite_with_aligners` | Bite with aligners | Occlusione con allineatori |
-| 2 | `aligners.menu.occlusion.bite_ramps` | Bite ramps | Rialzi occlusali |
-| 1 | `aligners.menu.production` | Aligner production | Produzione allineatori |
-| 2 | `aligners.menu.production.model_base` | Model base & labels | Base del modello ed etichette |
-| 2 | `aligners.menu.production.shell` | Aligner shell (thickness/clearance) | Guscio allineatore (spessore/gioco) |
-| 2 | `aligners.menu.production.trim_line` | Trim line | Linea di rifinitura |
-| 2 | `aligners.menu.production.id_stamp` | Identification stamp | Marcatura identificativa |
-| 2 | `aligners.menu.production.print_check` | Print check | Verifica di stampa |
-| 1 | `aligners.menu.follow_up` | Follow-up | Controlli |
-| 2 | `aligners.menu.follow_up.control_visits` | Control visits | Visite di controllo |
-| 2 | `aligners.menu.follow_up.tracking_replan` | Tracking & re-plan | Monitoraggio e ripianificazione |
-| 1 | `aligners.menu.output` | Output | Esportazione |
-| 2 | `aligners.menu.output.export_stl` | Export STL per stage | Esporta STL per stadio |
-| 2 | `aligners.menu.output.report` | Report | Relazione |
-| 2 | `aligners.menu.output.patient_viewer` | Patient viewer/animation | Visualizzatore/animazione per il paziente |
-| 1 | `aligners.menu.tools` | Tools | Strumenti |
-| 2 | `aligners.menu.tools.manual_tools` | Manual tools | Strumenti manuali |
-| 2 | `aligners.menu.tools.history` | History | Cronologia |
+Progress: the footer and the group rows count only the **eight steps** of the workflow, marked **step** below: Import scans, Find the teeth, Separate teeth and gum, 3D teeth, Case analysis, Bite, Final position, Aligners. The footer reads `done/8` (mono, with the success bar). A group row shows `done/total` of its own steps in mono; a group with no step (Production, Follow-up) shows no counter. Run everything automatically, the manual corrections, Move a tooth, Export for printing, Study models, Control visit and Re-plan are not steps: they are shortcuts, optional tools, outputs and follow-up, and never count.
+
+A leaf shows a check mark when the case holds its result: after a fresh run and after reopening the project (the module reads it from the case data; undoing a step takes the mark away). The leaves that leave nothing in the case (Move a tooth, the exports, the re-plan, the pipeline) never show one.
+
+| Group | Leaf / sub-group | English | Italiano | Counts |
+|---|---|---|---|---|
+| Case (`aligners.case`) | | Case | Caso | 1 step |
+| | `aligners.case.import-scans` | Import scans | Importa scansioni | step |
+| | `aligners.auto` | Run everything automatically | Esegui tutto in automatico | no |
+| Teeth (`aligners.teeth`) | | Teeth | Denti | 3 steps |
+| | `aligners.preparation.numbering.automatic` | Find the teeth | Trova i denti | step |
+| | `aligners.preparation.segmentation.automatic` (key A) | Separate teeth and gum | Separa denti e gengiva | step |
+| | `aligners.teeth.build` | 3D teeth | Denti 3D | step |
+| | sub-group `aligners.teeth.manual`, closed by default | Manual corrections | Correzioni a mano | no |
+| | `aligners.preparation.numbering.place-seeds` | Mark a tooth | Segna un dente | no |
+| | `aligners.preparation.numbering.renumber` | Change a tooth number | Cambia il numero di un dente | no |
+| | `aligners.preparation.numbering.mark-missing` | Missing tooth | Dente assente | no |
+| | `aligners.preparation.segmentation.manual-brush` (key B) | Tooth brush | Pennello dei denti | no |
+| | `aligners.preparation.segmentation.clean-borders` | Clean borders | Pulisci i bordi | no |
+| Diagnosis (`aligners.diagnosis`) | | Diagnosis | Diagnosi | 1 step |
+| | `aligners.diagnosis.space-analysis` | Case analysis | Analisi del caso | step |
+| Plan (`aligners.planning`) | | Plan | Piano | 3 steps |
+| | `aligners.occlusion.align` | Bite | Morso | step |
+| | `aligners.planning.setup.automatic` | Final position | Posizione finale | step |
+| | `aligners.planning.movements` | Move a tooth | Sposta un dente | no |
+| | `aligners.planning.aligners` (key S) | Aligners | Allineatori | step |
+| Production (`aligners.production`) | | Production | Produzione | none |
+| | `aligners.output.export-all` (asks for a folder) | Export for printing | Esporta per la stampa | no |
+| | `aligners.output.study-models` | Study models | Modelli da studio | no |
+| Follow-up (`aligners.followup`) | | Follow-up | Visite | none |
+| | `aligners.followup.visits` (asks for a scan) | Control visit | Visita di controllo | no |
+| | `aligners.followup.tracking` | Re-plan | Ripianifica | no |
+
+Behaviour of a click on a leaf:
+
+- **Import scans** opens the file dialog (STL, OBJ, PLY).
+- **Export for printing** opens a folder dialog, **Control visit** a scan file dialog; the answer goes to the command as its parameter (`dir`, `scan`). A cancelled dialog does nothing; while another command runs the click shows the "another operation is running" notice. The export runs in the background with the job in the status bar (name, bar, cancel cross), warns in one line that it can take a long time, can be stopped, and leaves no half-written folder: the files are built in a hidden folder inside the target and moved into place when all are made, the manifest last. When it ends, a notification that stays until closed gives the folder and the number of files.
+- **Bite** shows which method ran: the registration on the bite scan, or the estimate (the case has no bite scan, said as a warning). **Run everything automatically** uses the same bite.
+- **Run everything automatically** is one job with the step it is on named in the status bar and a cross to stop it. It stops with a clear message at the first step that fails, for instance on an arch the program only guessed (the message says which scan to check); the case is left as it was. When it ends it refreshes the viewport, selects the next leaf (the first step with no result, otherwise Case analysis) and shows a summary notification ("Everything ran: 14 steps in 3 min 20 s. Next: check the results in Case analysis, then use Export for printing.").
+- **Case analysis** shows its results in the inspector, one card per arch (space available and needed, difference with the words Crowding / Spacing / Enough space, Little index with its category), then the Bolton ratios and the complexity of the case with its level.
+- The inspector of a leaf has a clear primary button under the description (Run, or Choose the scan files…, Choose the folder and export…, Choose the scan of the visit…); a step already done offers Run again as a secondary button. Manual tools open their own panel instead.
+- The keyboard sheet (F1) lists the keys of the tools in key order: A Separate teeth and gum, B Tooth brush, S Aligners.
 
 Other keys used on the workspace (sample): `aligners.inspector.staging.title` Staging / Stadiazione; `aligners.inspector.staging.max_movement` Max movement per stage / Movimento massimo per stadio; `aligners.inspector.staging.recompute` Recompute staging / Ricalcola la stadiazione; `aligners.timeline.stage` Stage / Stadio; `aligners.viewport.view.occlusal` Occlusal / Occlusale; `common.save` Save / Salva; `common.undo` Undo / Annulla; `common.redo` Redo / Ripeti; `common.help` Help / Guida; `home.new_project` New project / Nuovo progetto; `home.open_project` Open project… / Apri progetto…; `home.modules` Modules / Moduli; `home.recent_projects` Recent projects / Progetti recenti; `account.sign_in_with` Sign in with DentalCraft account / Accedi con l'account DentalCraft; `support.title` Help & support / Assistenza.
 
-i18n notes: Italian runs about 20 to 35 % longer (verified in `01 Home (IT)` and `05 Aligners workspace (IT)`): menu labels up to "Orientamento e arcata automatici" fit 288 pt; inspector section headers must wrap (header row is vertical for that reason); never set fixed widths on buttons.
+i18n notes: Italian runs about 20 to 35 % longer (verified in `01 Home (IT)` and `05 Aligners workspace (IT)`): menu labels up to "Cambia il numero di un dente" fit 288 pt; inspector section headers must wrap (header row is vertical for that reason); never set fixed widths on buttons.
 
 ## 7. Accessibility
 
