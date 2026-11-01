@@ -12,6 +12,12 @@ This rule overrides "Versioning workflow" and "CI notes" below.
 - Keep the local quality gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`) for the crates you touch.
 - When the user ends this mode, push the branches and run the normal release flow.
 
+## Feature order: one at a time
+
+- Work on one feature at a time, in workflow order, starting from scan import. Touch other features only where they interact with the current one.
+- The feature must end up working well. Never move to the next feature on your own: when it is done, report and wait until the user expressly asks to go on.
+- If the user asks for work on a specific other feature, do it, then return to the feature reached in the sequence.
+
 ## Requirement: agent-drivable (CLI + MCP, like the ArtCraft apps)
 
 DentalCraft must ship `dentalcraft-cli` and an MCP server (`dentalcraft-cli mcp`) so that AI agents can drive everything:
