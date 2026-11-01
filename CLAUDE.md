@@ -17,6 +17,8 @@ This rule overrides "Versioning workflow" and "CI notes" below.
 - Work on one feature at a time, in workflow order, starting from scan import. Touch other features only where they interact with the current one.
 - The feature must end up working well. Never move to the next feature on your own: when it is done, report and wait until the user expressly asks to go on.
 - If the user asks for work on a specific other feature, do it, then return to the feature reached in the sequence.
+- Every agent works on the current feature. Parallel agents may take different tasks of that same feature, never different features.
+- Keep the user informed: every status update names the current feature, its tasks with their status, and the issues found. Explain every problem plainly, including unresolved ones.
 
 ## Requirement: agent-drivable (CLI + MCP, like the ArtCraft apps)
 
