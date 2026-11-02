@@ -19,7 +19,7 @@ The alphas include scan import and the simple left menu (six groups, eight steps
 
 ## Current feature: "Trova i denti" (Find the teeth)
 
-Local branches `feat/find-teeth` in `dentalcraft-aligners` and `dentalcraft-app`; `dentalcraft-core` is untouched. Spec: `docs/design/ui-spec.md`, section "Find the teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
+Local branches `feat/find-teeth` in `dentalcraft-aligners` and `dentalcraft-app`; `dentalcraft-core` is untouched on that branch. Spec: `docs/design/ui-spec.md`, section "Find the teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
 
 Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real.rs`.
 
@@ -27,7 +27,20 @@ Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real
 - Oracle script: `crates/dca-algo/tests/fixtures/gen_autoseed_real.py`.
 - The test compares the port with the plugin on 4 real scans (seeds within 0.5 mm, arch frame within 0.05 mm and 0.05 degrees). It is skipped without both env vars. TODO: not re-run in this check (needs the scans and the oracle output); confirm the result before stating that it matches.
 
-Deferred to the "Denti 3D" feature: seed correction after segmentation and the crown-width verification loop.
+The seed check after segmentation and the crown-width verification loop, first deferred to "Denti 3D", are now ported (in `aligners.auto`; command `aligners.preparation.segmentation.check`). Uncommitted at the time of writing (another agent commits them).
+
+## Side request done: "Denti 3D" (3D teeth)
+
+Done on local branches `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`). It is a side request: the current feature in the sequence is still "Trova i denti", awaiting the user's trial. Spec: `docs/design/ui-spec.md`, section "3D teeth".
+
+- Leaf `aligners.teeth.build`: closed teeth and gingiva per arch, diagnosis, one undo step, partial rebuild of hand-corrected teeth. Viewport toggle Scan / 3D teeth, gingiva deformed per stage, number chips follow the stage poses, `model` and `stage` in CLI and MCP renders.
+- Performance: the teeth build takes about 27 s per real pair of scans instead of 49 s, with bit-identical output.
+
+Known open points of this side request:
+
+- The bite scan is still drawn together with the built teeth.
+- The gingiva deformation is tested only on synthetic data (the demo case has no stages).
+- One tooth attempt produces non-finite vertices (the quadratic self-intersection check; also at HEAD).
 
 ## Known issue for planning: 719-stage anomaly
 
@@ -35,7 +48,7 @@ Root cause: a quaternion with `w < 0` comes out of the setup pose composition (`
 
 Same pattern, to check when fixing: `frame::matrix_to_rotvec`, `setup.rs:272`, `dca-module/src/commands/visits.rs:740` and `:753`, `dca-algo/src/export.rs:398`.
 
-Measured: flipping the sign gave 12 / 9 aligners (upper / lower) instead of 637 / 498. Separately, setup still leaves overlaps up to 2.6 mm. Not fixed; it belongs to the setup and staging feature, not to the current one.
+Measured: flipping the sign gave 12 / 9 aligners (upper / lower) instead of 637 / 498. Separately, setup still leaves overlaps up to 2.6 mm. Not fixed (still open, in planning); it belongs to the setup and staging feature, not to the current one.
 
 ## Parked branches
 
@@ -58,6 +71,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 git submodule status
 cd dentalcraft-aligners && git switch feat/find-teeth && cargo test      # inside the superproject, local [patch] applies
 cd ../dentalcraft-app && git switch feat/find-teeth && cargo test
+# 3D teeth side request: git switch feat/teeth-3d in core, aligners and app
 # real-scan oracle test (needs the scans and the oracle output)
 cd ../dentalcraft-aligners && DC_REAL_SCANS=<scans dir> DC_AUTOSEED_REAL_ORACLE=<oracle dir> cargo test -p dca-algo --test autoseed_real -- --nocapture
 ```
