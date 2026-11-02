@@ -118,7 +118,7 @@ A leaf shows a check mark when the case holds its result: after a fresh run and 
 | | `aligners.case.import-scans` | Import scans | Importa scansioni | step |
 | | `aligners.auto` | Run everything automatically | Esegui tutto in automatico | no |
 | Teeth (`aligners.teeth`) | | Teeth | Denti | 3 steps |
-| | `aligners.preparation.numbering.automatic` | Find the teeth | Trova i denti | step |
+| | `aligners.teeth.find` | Find the teeth | Trova i denti | step |
 | | `aligners.preparation.segmentation.automatic` (key A) | Separate teeth and gum | Separa denti e gengiva | step |
 | | `aligners.teeth.build` | 3D teeth | Denti 3D | step |
 | | sub-group `aligners.teeth.manual`, closed by default | Manual corrections | Correzioni a mano | no |
@@ -150,6 +150,30 @@ Behaviour of a click on a leaf:
 - **Case analysis** shows its results in the inspector, one card per arch (space available and needed, difference with the words Crowding / Spacing / Enough space, Little index with its category), then the Bolton ratios and the complexity of the case with its level.
 - The inspector of a leaf has a clear primary button under the description (Run, or Choose the scan files…, Choose the folder and export…, Choose the scan of the visit…); a step already done offers Run again as a secondary button. Manual tools open their own panel instead.
 - The keyboard sheet (F1) lists the keys of the tools in key order: A Separate teeth and gum, B Tooth brush, S Aligners.
+
+### Find the teeth (`aligners.teeth.find`)
+
+The leaf runs the wrapper command `aligners.teeth.find`: the automatic numbering (`aligners.preparation.numbering.automatic`) first, then the automatic orientation (`aligners.preparation.orientation.automatic`), as **one undo step**. Each arch is numbered on its own. An arch that fails keeps the tooth marks it had and is named in a notice; the other arch gets its new marks.
+
+Inspector (below the description of the leaf):
+
+- Section "Options" with the checkbox "Search also the third molars".
+- Field "Missing teeth" (hint "e.g. 35, 45"; FDI numbers separated by commas, semicolons or spaces; helper "FDI numbers separated by commas. They are applied when you leave the field."). While you type, a wrong number shows the red message "Not a tooth number: <entries>. Use FDI numbers: 11 to 18, 21 to 28, 31 to 38, 41 to 48." The field is labelled for screen readers. The list is saved when the field loses focus and the text is valid; a wrong text is not saved. **Run is not blocked**: it uses the last saved list.
+- Section "Teeth found": for each arch that has a scan, a title ("Upper arch" / "Lower arch") and a grid of 8 columns by 2 rows, one cell per tooth, right side of the patient first (upper: 18..11, 21..28; lower: 48..41, 31..38). The third molars (18, 28, 38, 48) are left out when the checkbox is off. A cell is a small box and the tooth number, in one of three states: filled box (the tooth has a mark; hover and screen-reader text "<n>: has a mark"), crossed box ("<n>: missing"; a tooth in the missing list wins over a mark), empty box ("<n>: no mark"). Under the grids: "<n> teeth numbered" and the legend "Filled box: the tooth has a mark. Crossed box: the tooth is missing." Without any arch scan the section says "Import the scan of an arch to see its teeth."
+- The checkbox and the list are saved in the case through `aligners.settings.find-teeth` (`Settings.find_teeth`), one undo step each, so they come back when the project is reopened.
+- The primary button runs the leaf with these settings; a step already done offers Run again as a secondary button (as for every leaf).
+
+Notices after a change of the tooth marks (toasts of the workspace, not part of the inspector):
+
+- Automatic numbering drops what depends on the marks of that arch. Toast "Results cleared": "Cleared because the tooth marks changed: <list>. Run those steps again; Ctrl+Z brings the previous tooth marks and these results back."
+- Manual mark edits (place, sequence, clear) keep that data and mark it out of date. Toast "Results out of date": "Kept but out of date because the tooth marks changed: <list>. Run teeth and gum again, then the steps after it."
+- An arch that could not be numbered: toast "An arch was not numbered": "<reasons>. That arch keeps the tooth marks it had; the other arch has its new ones."
+
+Manual tools, in the "Mark a tooth" panel (`aligners.preparation.numbering.place-seeds`):
+
+- **Number the teeth in order** (button, with the checkbox "Include the third molars", which starts from the setting of Find the teeth). The command is `aligners.preparation.numbering.sequence`, sent once at the end, so the whole numbering is one undo step. The panel asks "Click tooth <n>" (or "Click a tooth on the scan to start" while the arch is not known, "All the teeth are numbered" at the end) and the hint says "Click the centre of the biting surface of the tooth shown, from the patient's right to the left. S: skip this tooth. Backspace: go back. Enter or Esc: done." The order is upper 18..11 then 21..28, lower 48..41 then 31..38, without the teeth that already have a mark or are missing. With two arches the first click chooses the arch; a click on the other scan shows "Click on the same scan until the numbering is done."
+- Keys and buttons: **S** or "Skip (S)" skips the tooth (not added to the missing teeth), **Backspace** or "Back (Backspace)" takes the last step back, **Enter** or **Esc** or "Done (Enter)" finishes and keeps the marks, "Cancel" discards the marks of the session. The numbering also ends by itself on the last tooth of the order. It stops with the notice "The numbering in order stopped because the case changed (undo, redo or another command): start it again." when the undo stack moves under it. Finishing with no click sends nothing; success shows "The teeth were numbered." with the count and the next tooth.
+- **Clear all the tooth marks** (button; `aligners.preparation.numbering.clear-seeds`, called with no parameters, so both arches) removes all the marks of the case and keeps the missing-teeth list. Notice "The tooth marks were cleared."
 
 Other keys used on the workspace (sample): `aligners.inspector.staging.title` Staging / Stadiazione; `aligners.inspector.staging.max_movement` Max movement per stage / Movimento massimo per stadio; `aligners.inspector.staging.recompute` Recompute staging / Ricalcola la stadiazione; `aligners.timeline.stage` Stage / Stadio; `aligners.viewport.view.occlusal` Occlusal / Occlusale; `common.save` Save / Salva; `common.undo` Undo / Annulla; `common.redo` Redo / Ripeti; `common.help` Help / Guida; `home.new_project` New project / Nuovo progetto; `home.open_project` Open project… / Apri progetto…; `home.modules` Modules / Moduli; `home.recent_projects` Recent projects / Progetti recenti; `account.sign_in_with` Sign in with DentalCraft account / Accedi con l'account DentalCraft; `support.title` Help & support / Assistenza.
 

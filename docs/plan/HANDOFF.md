@@ -1,59 +1,71 @@
-# Handoff, 2026-10-31
+# Handoff, 2026-11-02
 
-> Superseded for current state by [`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md) (port B0 to B6, agent control, website). The wave 1 notes below are kept for history.
+Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
-State at the end of day 1, and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md).
+## Mode
 
-## Pinned versions
+Local-only, speed-first (CLAUDE.md "Current mode"), with one exception: the first public alpha (requested 2026-11-01) was tagged and released. Work after the tags is local only.
 
-`dentalcraft-core` v0.2.1, `dentalcraft-aligners` v0.1.0, `dentalcraft-app` v0.1.0, `dentalcraft-server` v0.1.0.
+## Released: alpha tags on `main`
 
-## State per repository
-
-Wave 1 (WP1 to WP11) is done: the skeleton runs end to end (sign-in, home, new project, workspace with viewport, save and load `.dcprj`).
-
-| Repository | Real | Stubbed |
+| Submodule | Tag | Notes |
 | --- | --- | --- |
-| `dentalcraft-core` | Mesh I/O, `.dcprj` read/write, case model, commands and undo, jobs, module API (select hook, `ModuleCodec`), i18n, theme. | `dc-geom` is not validated against the old plugin yet (Wave 2). `dc-theme` carries placeholder tokens. |
-| `dentalcraft-aligners` | Data model, menu tree, inspectors, en/it strings, state codec. | All `dca-algo` stages (autoseed, segmentation, reconstruct, diagnosis, setup, staging, occlusion, shell, trim, stamp, visits, export, bite) are stubs; commands answer "Not yet available". |
-| `dentalcraft-app` | Shell, sign-in (PKCE loopback, keyring), home, new project, workspace, viewport, support screen, en/it, real design tokens in `dc-ui`. | News, documentation URLs, ticket list and attachments, evaluation and create-account flows. Release issuer URL is a placeholder (`RELEASE_ISSUER` in `dc-app/src/config.rs`). Regulatory dossier not carried over; `xtask` is absent. |
-REDACTED
+| `dentalcraft-core` | `v0.3.0-alpha.1` | |
+| `dentalcraft-aligners` | `v0.2.0-alpha.1` | |
+| `dentalcraft-app` | `v0.2.0-alpha.1` | |
+| `dentalcraft-server` | `v0.5.0` | |
 
-## Next waves (PLAN section 4)
+The alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `feat/port-b0` branches of the earlier handoff are superseded by these tags and no longer the base of the work.
 
-Suggested order:
+## Current feature: "Trova i denti" (Find the teeth)
 
-1. **Wave 2, core geometry (WP12 to WP18).** Start with WP12, the golden harness: run the old plugin headless in Blender to produce JSON and `.dcm` fixtures. Everything else is validated against it. After WP12, WP13 to WP18 are independent and can run in parallel, one agent each: BVH/closest/ray (WP13), ICP (WP14), QEM (WP15), Liepa hole fill (WP16), PCG and harmonic solves (WP17), SDF (WP18). WP14 and WP18 are the heaviest. Tolerances are in PLAN section 5.
-2. **Wave 3, import and segmentation (WP19 to WP24).** WP19 (world frame, import) first; WP20 and WP21 follow, WP22 and WP23 depend on WP21; WP24 (overlays, paint) can run alongside.
-3. **Wave 4, setup and staging (WP25 to WP28).** WP25 first; WP26 and WP27 in parallel; WP28 last.
-4. **Wave 5, appliance (WP29 to WP33).** WP29 first; WP30, WP31 and WP32 in parallel; WP33 last.
-5. **Wave 6 (WP34 to WP39).** WP34 and WP35 on top of Wave 5. WP36 (wgpu compute) is independent and can start any time after Wave 2. WP37 (licensing, tickets) needs the server deployed. WP38 (xtask trace, SOUP) can start early and should, see below. WP39 (packaging) last.
+Local branches `feat/find-teeth` in `dentalcraft-aligners` and `dentalcraft-app`; `dentalcraft-core` is untouched. Spec: `docs/design/ui-spec.md`, section "Find the teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
 
-Per wave: one core release, then consumers move to the tag, then the pointer bump here.
+Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real.rs`.
 
-## Open items
+- Env vars: `DC_REAL_SCANS` (folder with the scans; see the test-scans memory, never commit them) and `DC_AUTOSEED_REAL_ORACLE` (oracle output).
+- Oracle script: `crates/dca-algo/tests/fixtures/gen_autoseed_real.py`.
+- The test compares the port with the plugin on 4 real scans (seeds within 0.5 mm, arch frame within 0.05 mm and 0.05 degrees). It is skipped without both env vars. TODO: not re-run in this check (needs the scans and the oracle output); confirm the result before stating that it matches.
 
-- **Golden harness (WP12).** Needs a headless run of the old plugin to produce fixtures. Teeth3DS is licensed CC BY-NC-ND: decide whether to use it for fixtures at all or use our own scans. Until decided, keep it out of the repositories (`$DC_TEETH3DS`).
-- **Tokens in two places.** `dc-theme` (core, placeholder tokens) and `dc-ui` (app, real tokens) overlap. Consolidate so tokens live in one place, derived from `docs/design/tokens.json`.
-REDACTED
-- **release-please checks.** Checks do not trigger on PRs opened by `github-actions[bot]`. Merge without them or switch to a PAT.
-- **App CI takes about 17 minutes**, mostly runner queue time.
-- **App stubs.** News, documentation URLs, ticket list and attachments, evaluation and create-account. The server tickets API returns 501; both sides must land together.
-- **Regulatory dossier.** Carry over from the old `docs/regolatorio` to `dentalcraft-app/regulatory` (`requisiti.toml`, `rischi.toml`, `soup.toml`, `anomalie.toml`, `classificazione.md`) and implement `cargo xtask trace --check` to replace `build_trace.py`. Not started.
-- **Attachments are not modelled** (old anomaly ANO-001). Decide the data model before WP26 and WP33.
+Deferred to the "Denti 3D" feature: seed correction after segmentation and the crown-width verification loop.
+
+## Known issue for planning: 719-stage anomaly
+
+Root cause: a quaternion with `w < 0` comes out of the setup pose composition (`dca-module/src/commands/setup.rs:166-167` and `:264-266`), and glam's `to_scaled_axis` is used without a sign flip in `dca-algo/src/staging.rs:541` (`q_from_pose`). The rotation vector then takes the long way round, and staging counts hundreds of stages.
+
+Same pattern, to check when fixing: `frame::matrix_to_rotvec`, `setup.rs:272`, `dca-module/src/commands/visits.rs:740` and `:753`, `dca-algo/src/export.rs:398`.
+
+Measured: flipping the sign gave 12 / 9 aligners (upper / lower) instead of 637 / 498. Separately, setup still leaves overlaps up to 2.6 mm. Not fixed; it belongs to the setup and staging feature, not to the current one.
+
+## Parked branches
+
+- `dentalcraft-aligners`: `fix/model-stamps` (`03be70d`), `wip/standard-export` (`04e471b`).
+- `feat/port-b0` in core, aligners and app: old port work, local only.
+
+## Open items (still valid from wave 1)
+
+- **Golden harness.** Teeth3DS is CC BY-NC-ND: keep it out of the repositories (`$DC_TEETH3DS`). Real scans for tests are in `datasets/development/arcate_singole_T10` (gitignored, read-only).
+- **Tokens in two places.** `dc-theme` (core, placeholder) and `dc-ui` (app, real) overlap; consolidate from `docs/design/tokens.json`.
+- **App stubs.** News, documentation URLs, ticket list and attachments, evaluation flow. Attachments are not modelled (old anomaly ANO-001).
+- **Regulatory dossier** not carried over; `cargo xtask trace --check` not written.
+- **release-please checks** do not run on PRs opened by `github-actions[bot]`.
 
 ## How to resume
 
 ```sh
-git clone --recurse-submodules https://github.com/dnviti-personal-org/dentalcraft.git   # or: git submodule update --init --recursive
+cd <your checkout>
 export PATH="$HOME/.cargo/bin:$PATH"
-cd dentalcraft-core && cargo test        # inside the superproject, local [patch] applies
+git submodule status
+cd dentalcraft-aligners && git switch feat/find-teeth && cargo test      # inside the superproject, local [patch] applies
+cd ../dentalcraft-app && git switch feat/find-teeth && cargo test
+# real-scan oracle test (needs the scans and the oracle output)
+cd ../dentalcraft-aligners && DC_REAL_SCANS=<scans dir> DC_AUTOSEED_REAL_ORACLE=<oracle dir> cargo test -p dca-algo --test autoseed_real -- --nocapture
 ```
 
-Read `CLAUDE.md` for commands, versioning workflow and the `Cargo.lock` rule.
+Read `CLAUDE.md` for the quality gate and the `Cargo.lock` rule (`git checkout -- Cargo.lock` in the submodule before committing).
 
 ## Known risks
 
-- Geometry ports may miss the golden tolerances (Hausdorff < 0.01 mm, labels >= 99 %); budget time for WP14 and WP18.
-- Fixtures depend on a Blender run of the old plugin; keep the oracle repository untouched.
-- Release issuer URL and server domain are unconfirmed.
+- Everything after the alpha tags exists only on this machine until local-only mode ends.
+- The setup and staging stages are not trustworthy yet (719-stage anomaly, overlaps); do not present planning output as production-ready.
+- The standard-quality export is slow and fails the print check (see the day-2 handoff).
