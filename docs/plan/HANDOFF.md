@@ -18,9 +18,40 @@ From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/l
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags.
 
-## Current feature: "Trova i denti" (Find the teeth)
+## Current feature: "Separa denti e gengiva" (Separate teeth and gum)
 
-Merged into `main` of `dentalcraft-aligners` and `dentalcraft-app` and released in the `.2` alphas (with `feat/teeth-3d`). Spec: `docs/design/ui-spec.md`, section "Find the teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
+Branch `feat/separate-teeth-gum` in `dentalcraft-aligners` and `dentalcraft-app` (local, not pushed, no PR; from `main` at the `.2` alphas). Spec: `docs/design/ui-spec.md`, section "Separate teeth and gum". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
+
+Done:
+
+- Aligners (`aligners.preparation.segmentation.automatic`): refusal of a separation without usable tooth marks, the case parameters `aligners.settings.segmentation` (`target_faces` 5000 to 200000, `eta_convex` 0.01 to 1, `sigma` 0.1 to 10; out-of-range values are refused and change nothing), invalidation of what depends on the old labels (output `invalidated`, in a fixed order), the doubts of the check, and the progress of the five sub-steps in the status bar. Output carries `teeth`, `seconds`, `invalidated` and per arch the report.
+- App: the leaf inspector with the parameters (sliders for the three settings), the result line and the out-of-date notice for what the new separation left stale. Headless test `dc-workspace/tests/separate_teeth.rs`; CLI test `the_segmentation_settings_and_run_work_on_the_demo_case` in `dc-cli/tests/aligners_pipeline.rs`.
+- Real-scan oracle (`dentalcraft-aligners/crates/dca-algo/tests/segmentation_real.rs`, oracle script `tests/fixtures/gen_segmentation_real.py`), 4 real scans, plugin `42e6d87`, Blender 5.2.2, measured 2026-11-08:
+  - Blender's simplified mesh fed to the port: label agreement 1.0 (final labels 1.00000 / 1.00000 / 1.00000 / 0.99997, same CG iteration counts).
+  - The port's own simplification (`dc_geom::qem`): final agreement 0.995 to 0.998 (0.99797 / 0.99479 / 0.99688 / 0.99660), threshold 0.99. Worst tooth IoU 0.83: last molar 17 of scan b (patch that goes to the neighbouring molar or to the gingiva).
+
+Run the real-scan test (needs the scans, Blender on PATH for the oracle; the oracle folder stays outside the repository and is deleted after the run; never commit scans or coordinates):
+
+```sh
+cd dentalcraft-aligners
+out=$(mktemp -d /tmp/dc-segreal-XXXX)
+for l in a b c d; do DC_REAL_SCANS=<scans> python3 -B crates/dca-algo/tests/fixtures/gen_segmentation_real.py "$out" --only $l & done; wait
+DC_REAL_SCANS=<scans> DC_SEGMENTATION_REAL_ORACLE="$out" cargo test --release -p dca-algo --test segmentation_real -- --nocapture --test-threads=1
+rm -r "$out"
+```
+
+Without both variables the test skips itself.
+
+Open points:
+
+- The result line (teeth and seconds) is not shown after reopening a project: the duration is not stored in the case.
+- Preexisting, not from this feature: the mono slider shows a decimal gap ("0. 20").
+- The all-cases segmentation oracle on the demo case (`segmentation_oracle.rs`) is still ignored.
+- Aligners must be released before the app branch builds standalone: the app uses the new aligners API (settings, `invalidated`), and the standalone build resolves the pinned aligners tag. Release aligners, move the app pin, then merge the app.
+
+## Released: "Trova i denti" (Find the teeth)
+
+Merged into `main` of `dentalcraft-aligners` and `dentalcraft-app` and released in `v0.2.0-alpha.2` (with `feat/teeth-3d`). Spec: `docs/design/ui-spec.md`, section "Find the teeth".
 
 Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real.rs`.
 
@@ -28,11 +59,11 @@ Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real
 - Oracle script: `crates/dca-algo/tests/fixtures/gen_autoseed_real.py`.
 - The test compares the port with the plugin on 4 real scans (seeds within 0.5 mm, arch frame within 0.05 mm and 0.05 degrees). It is skipped without both env vars. Re-run on 2026-11-08: 4/4 pass, deviations about 1e-14 mm.
 
-The seed check after segmentation and the crown-width verification loop, first deferred to "Denti 3D", are now ported (in `aligners.auto`; command `aligners.preparation.segmentation.check`), and released in aligners `v0.2.0-alpha.2`.
+The seed check after segmentation and the crown-width verification loop, first deferred to "Denti 3D", are ported (in `aligners.auto`; command `aligners.preparation.segmentation.check`) and released in aligners `v0.2.0-alpha.2`.
 
 ## Side request done: "Denti 3D" (3D teeth)
 
-Done on `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`), merged into `main` and released in the `.2` alphas. It is a side request: the current feature in the sequence is still "Trova i denti", awaiting the user's trial. Spec: `docs/design/ui-spec.md`, section "3D teeth".
+Done on `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`), merged into `main` and released in the `.2` alphas. It is a side request, not the current feature. Spec: `docs/design/ui-spec.md`, section "3D teeth".
 
 - Leaf `aligners.teeth.build`: closed teeth and gingiva per arch, diagnosis, one undo step, partial rebuild of hand-corrected teeth. Viewport toggle Scan / 3D teeth, gingiva deformed per stage, number chips follow the stage poses, `model` and `stage` in CLI and MCP renders.
 - Performance: the teeth build takes about 27 s per real pair of scans instead of 49 s, with bit-identical output.
@@ -74,6 +105,7 @@ cd dentalcraft-aligners && git switch main && cargo test      # inside the super
 cd ../dentalcraft-app && git switch main && cargo test
 # real-scan oracle test (needs the scans and the oracle output)
 cd ../dentalcraft-aligners && DC_REAL_SCANS=<scans dir> DC_AUTOSEED_REAL_ORACLE=<oracle dir> cargo test -p dca-algo --test autoseed_real -- --nocapture
+# segmentation oracle: see "Current feature" above (branch feat/separate-teeth-gum)
 ```
 
 Read `CLAUDE.md` for the quality gate and the `Cargo.lock` rule (`git checkout -- Cargo.lock` in the submodule before committing).

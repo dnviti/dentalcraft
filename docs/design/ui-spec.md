@@ -185,6 +185,37 @@ Other keys used on the workspace (sample): `aligners.inspector.staging.title` St
 
 i18n notes: Italian runs about 20 to 35 % longer (verified in `01 Home (IT)` and `05 Aligners workspace (IT)`): menu labels up to "Cambia il numero di un dente" fit 288 pt; inspector section headers must wrap (header row is vertical for that reason); never set fixed widths on buttons.
 
+### Separate teeth and gum (`aligners.preparation.segmentation.automatic`, "Separa denti e gengiva")
+
+The leaf (menu label "Separate teeth and gum" / "Separa denti e gengiva") runs `aligners.preparation.segmentation.automatic` as **one undo step**, one arch at a time (an arch with a scan; with two arches each is separated on its own). It starts from the tooth marks (see Find the teeth) and paints every tooth on the scan with its own colour; the gum stays uncoloured.
+
+Refusals (nothing changes, localised notice that names the arch, "Upper arch" / "Lower arch"):
+
+- Fewer than 4 tooth marks on the arch: "<arch>: mark at least 4 teeth first." / "<arch>: segna prima almeno 4 denti."
+- Marks missing on one side (right or left) or on the incisors: "<arch>: the tooth marks must cover both sides and the front teeth." / "<arch>: i segni dei denti devono coprire entrambi i lati e i denti anteriori."
+
+Inspector (below the description of the leaf):
+
+- Info line: "It starts from the tooth marks. Running it again erases the colours you painted by hand." / "Parte dai segni dei denti. Se lo esegui di nuovo, cancella i colori dipinti a mano."
+- Folded section "Separation parameters" / "Parametri di separazione" (closed by default), three sliders with the unit-less value shown:
+  - "Scan detail (faces)" / "Dettaglio della scansione (facce)": 5000 to 200000, default 30000.
+  - "Tooth edge sensitivity" / "Sensibilità dei bordi dei denti": 0.01 to 1, default 0.2.
+  - "Border smoothing" / "Levigatura dei bordi": 0.1 to 10, default 1.0.
+
+  They are stored in the case settings (one undo step each), come back when the project is reopened, and are the same values **Run everything** uses.
+- After a run, the result line "<n> teeth separated in <s> s" / "<n> denti separati in <s> s" (one line per arch that ran; the same text in the success toast "Teeth and gum separated" / "Denti e gengiva separati").
+- The primary button runs the leaf; once done it offers Run again as a secondary button (as for every leaf).
+
+Progress: the job runs in the status bar with the label "Separating teeth and gum" / "Separazione di denti e gengiva", the usual progress bar and cross to stop, and these sub-steps, in order: "Simplified scan" / "Scansione semplificata", "First separation" / "Prima separazione", "Tooth colours on the full scan" / "Colori dei denti sulla scansione completa", "Borders at full resolution" / "Bordi alla piena risoluzione", "Cleanup" / "Pulizia". Stopping leaves the arch as it was.
+
+After a successful run:
+
+- 3D teeth and the steps after it (and their check marks in the menu) are marked out of date: the check marks are removed and the toast "Results out of date" lists them (same wording as after a change of the tooth marks).
+- The viewport switches to **Scan** view, so the new colours are visible (the 3D teeth toggle is described above).
+- Seed-check problems and notes found by the run are kept in the case and shown again as a warning when the case is exported.
+
+Reachable from CLI and MCP as the command `aligners.preparation.segmentation.automatic` (parameters `arch`, and the three separation parameters, defaulting to the saved settings); the whole automatic pipeline (`aligners.auto`) runs it after the numbering and orientation.
+
 ### 3D teeth (`aligners.teeth.build`, "Denti 3D")
 
 The leaf (menu label "3D teeth", description "Gives you every tooth as a closed 3D model with its axis, and a gum that follows the teeth.") runs `aligners.teeth.build` with parameters `arch` (all, upper, lower) and `teeth` (FDI numbers to build again), as **one undo step**. It needs teeth and gum separated. Per arch:
