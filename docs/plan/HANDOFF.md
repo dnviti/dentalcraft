@@ -14,6 +14,7 @@ From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/l
 | `dentalcraft-aligners` | `v0.2.0-alpha.2` | find the teeth, 3D teeth, real-scan autoseed oracle test |
 | `dentalcraft-app` | `v0.2.0-alpha.2` | find the teeth and 3D teeth in the viewport; linux and windows binaries on the release |
 | `dentalcraft-server` | `v0.5.0` | |
+| `dentalcraft-web` | none (`main` `5093413`) | no release-please; downloads point at app `v0.2.0-alpha.2`. Its image (`ghcr.io/dnviti-personal-org/dentalcraft-web`) is not pushed yet: `gh` lacks `write:packages`, so run `gh auth refresh -h github.com -s write:packages`, then `scripts/release-local.sh web-image` |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags.
 
