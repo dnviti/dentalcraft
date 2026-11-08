@@ -1,0 +1,19 @@
+# GitHub Actions of the dentalcraft repositories before the local CI period
+# (docs/local-ci.md). Read by scripts/actions-status.sh: `on` restores the
+# repository-level switch (gh api PUT repos/<org>/<repo>/actions/permissions)
+# to original_enabled; `off` turns it off. The workflows stay registered and
+# `active` in both cases: only the repository-level switch changes.
+#
+# Recorded on 2026-11-07 with `gh api repos/<org>/<repo>/actions/permissions`
+# and `.../actions/workflows`: every repository had Actions already switched
+# off (enabled=false, by the user) and all workflows active. original_enabled
+# is `true` because every repository ran workflows until the switch-off (last
+# runs 2026-10-31 .. 2026-11-02). allowed_actions is not returned while Actions
+# are off; `on` does not send it, so GitHub keeps the previous policy.
+# repo	original_enabled	workflows (id:path, all active)
+dentalcraft	true	402656311:.github/workflows/submodules.yml
+dentalcraft-core	true	402656187:.github/workflows/ci.yml 402656188:.github/workflows/release-please.yml
+dentalcraft-aligners	true	402656195:.github/workflows/ci.yml 402656196:.github/workflows/release-please.yml
+dentalcraft-app	true	402753962:.github/workflows/binaries.yml 402656207:.github/workflows/ci.yml 402656208:.github/workflows/release-please.yml
+dentalcraft-server	true	402751537:.github/workflows/binaries.yml 402656217:.github/workflows/ci.yml 402741163:.github/workflows/image.yml 402656218:.github/workflows/release-please.yml
+dentalcraft-web	true	402872858:.github/workflows/image.yml

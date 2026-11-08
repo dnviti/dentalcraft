@@ -88,3 +88,5 @@ Toolchain: Rust 1.99.1 (`rust-toolchain.toml` in each Rust repository), Go as de
 ## CI
 
 Every repository runs GitHub Actions on a self-hosted runner. Private cross-repository access in CI uses read-only SSH deploy keys stored as secrets (`DEPLOY_KEY_CORE`, `DEPLOY_KEY_ALIGNERS`). This repository only validates `.gitmodules` (`.github/workflows/submodules.yml`).
+
+**Suspended since 2026-11-07.** GitHub Actions are disabled on every repository, but the workflows stay in place. CI, PR merges and releases (release-please and the binaries/image jobs) run locally with the scripts in `scripts/`, which reproduce the workflows exactly. See [`docs/local-ci.md`](docs/local-ci.md).

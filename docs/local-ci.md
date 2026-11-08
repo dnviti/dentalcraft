@@ -1,0 +1,243 @@
+# Local CI and releases (GitHub Actions disabled)
+
+GitHub Actions are switched off on all six dentalcraft repositories (superproject, core, aligners, app, server, web) to save runner capacity. The workflow files under `.github/` stay as they are: they are suspended, not removed, and they remain the source of truth. The scripts in `scripts/` replay those workflows on this machine with the same commands, environment and versions, so a change behaves locally exactly as it would on the self-hosted runner.
+
+In this mode you push to GitHub by hand and merge pull requests with `gh pr merge --squash --admin`.
+
+| Script | Replaces |
+|---|---|
+| `scripts/ci-local.sh` | `ci.yml` (core, aligners, app, server), `submodules.yml` (superproject) |
+| `scripts/pr-merge-local.sh` | the pull-request checks, then the squash merge |
+| `scripts/release-local.sh` | `release-please.yml` and the jobs it chains (`binaries.yml`, `image.yml`), plus the dentalcraft-web `image.yml` |
+| `scripts/actions-status.sh` | shows the Actions switch of the six repositories, and turns it back on |
+
+Everything temporary lives in `~/.cache/dentalcraft-ci` (override with `DC_CI_CACHE`). Nothing is written to the repositories, `~/.gitconfig`, `~/.ssh` or `~/.cargo`.
+
+## Day-to-day flow
+
+1. Commit on a branch in the submodule, then run `scripts/ci-local.sh <repo>`.
+2. Push the branch and open the PR (`gh pr create`).
+3. Run `scripts/pr-merge-local.sh <repo> <pr>`. It tests the merge of the PR head into `origin/main`, then squash-merges with `--admin --match-head-commit <tested sha>`.
+4. Update local main to `origin/main`, then run `scripts/ci-local.sh <repo> --ref origin/main`. This is the run GitHub does on a push to main.
+5. Run `scripts/release-local.sh <repo>`. Use `--dry-run` first to see what release-please would do.
+   - It opens or updates the release PR.
+   - Merging that PR with step 3 (no CI, as on GitHub), then repeating steps 4 and 5, creates the tag and the GitHub release, and runs the chained jobs.
+6. For the superproject gitlink bumps (`chore(submodule): ...`), use `scripts/ci-local.sh super` and `scripts/pr-merge-local.sh super <pr>`.
+
+## `scripts/ci-local.sh`
+
+```sh
+scripts/ci-local.sh <core|aligners|app|server|super|all> [--ref <git-ref>] [--pr]
+scripts/ci-local.sh clean
+```
+
+**What it tests:**
+- It tests a committed ref, like `actions/checkout`. The default is `HEAD` of the repository.
+  - It refuses a dirty tree; pass `--ref` to test a committed ref anyway.
+  - For `super`, changes in the submodule checkouts are not counted as dirt.
+  - A ref starting with `origin/` fetches `origin` first.
+- `--pr` tests the merge of the ref into the freshly fetched `origin/main`, as GitHub tests `refs/pull/N/merge`. A conflict fails the run.
+- `all` runs `super`, `core`, `aligners`, `app` and `server` in that order. It stops at the first failure and prints a table of results and durations.
+
+**Where it builds:**
+- The commit is checked out into `~/.cache/dentalcraft-ci/<repo>/src`, outside the superproject.
+  - The superproject's `.cargo/config.toml` `[patch]` does not apply there, so core and aligners resolve to the git tags pinned in `Cargo.toml`, exactly as on the runner.
+  - The script refuses to run if any `.cargo/config(.toml)` exists in an ancestor directory or in its `CARGO_HOME`. As of 2026-11-07 there is none (`~/.cargo/config.toml` does not exist).
+- `CARGO_HOME` is `~/.cache/dentalcraft-ci/cargo-home`.
+- `src/target` persists between runs and stands in for `Swatinem/rust-cache`.
+
+**Environment, as on a fresh runner pod:**
+- Variables of the calling shell that change the build are dropped: `CARGO_*`, `RUST*` (except `RUSTUP_HOME`), `GIT_CONFIG*`, `GO*`, `CGO_*`.
+- `CARGO_INCREMENTAL=0` and `CARGO_TERM_COLOR=always` are set, as `dtolnay/rust-toolchain` sets them.
+- Aligners and app also get the job env `CARGO_NET_GIT_FETCH_WITH_CLI=true`.
+- The step "Use SSH for private dentalcraft repositories" is replayed with process-scoped variables:
+  - `GIT_CONFIG_COUNT/KEY_0/VALUE_0` carry the `https://github.com/dnviti-personal-org/` to `git@github.com:dnviti-personal-org/` `insteadOf` mapping.
+  - `GIT_SSH_COMMAND` uses a known_hosts file that holds only GitHub's pinned ed25519 key.
+  - Your SSH agent stands in for the deploy keys.
+
+**Steps** (each printed with its script and timing, like the runner log):
+
+| Repo | Steps |
+|---|---|
+| core, app | `cargo fmt --all --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace` |
+| aligners | the same, but tests are `cargo test --workspace --release` with `CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true` and `CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true` |
+| server | `test -z "$(gofmt -l .)"`; `go vet ./...`; `CGO_ENABLED=1 go test -race -count=1 ./...` |
+| super | the two checks of `submodules.yml`, verbatim |
+
+**Toolchains:**
+- Rust is 1.99.1 (the `ci.yml` pin, and `rust-toolchain.toml` in each repo). The script installs it with rustup only if it is missing.
+- Go is the exact version from `go.mod`, as `actions/setup-go` with `go-version-file` uses it: the `toolchain` directive, otherwise `go`.
+  - It runs through `GOTOOLCHAIN=go<version>`; the go command downloads that toolchain into `~/.cache/dentalcraft-ci/go`.
+  - The toolchain's `bin/` goes first on `PATH`, so `gofmt` matches as well.
+  - Fedora's packaged go (1.27 with `GOTOOLCHAIN=local` and `GOEXPERIMENT=nodwarf5` in its `go.env`) is not used for the build.
+- The C toolchain must already be installed (`gcc`). The runner installs it with the package manager; the script does not.
+
+**Pass marker:**
+- A passing run without `--pr` writes `~/.cache/dentalcraft-ci/<repo>/passed/<sha>`.
+- `release-local.sh` requires this marker for `origin/main`.
+
+`clean` removes `~/.cache/dentalcraft-ci` entirely: checkouts, targets, toolchains, markers and the npm cache.
+
+## `scripts/pr-merge-local.sh`
+
+```sh
+scripts/pr-merge-local.sh <core|aligners|app|server|super|web> <pr-number> [--dry-run]
+```
+
+**Checks before testing:**
+- The PR must be open and target `main`.
+- The script fetches `pull/<n>/head` and checks that it matches the PR head reported by GitHub.
+
+**When it skips CI** (GitHub never runs checks on these either):
+- Release-please PRs: author `github-actions[bot]`, or head branch `release-please--*`. The PRs that `release-local.sh` opens come from your account, but they keep the `release-please--*` branch.
+- dentalcraft-web, which has no `pull_request` workflow.
+
+**What it runs otherwise:**
+1. `scripts/ci-local.sh <repo> --pr --ref <head sha>`.
+2. `gh pr merge <n> --squash --admin --match-head-commit <head sha>`.
+
+The merge fails if the PR moved after the test.
+
+REDACTED
+
+## `scripts/release-local.sh`
+
+```sh
+scripts/release-local.sh <core|aligners|app|server> [--dry-run]
+scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only linux_x86_64|windows_x86_64]
+scripts/release-local.sh image server <tag> [--no-push]
+scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
+```
+
+### Release (`release-please.yml`)
+
+**Version:**
+- `googleapis/release-please-action@v5` currently resolves to tag `v5.0.0`, commit `45996ed1f6d02564a971a2fa1b5860e934307cf7`.
+- Its `package-lock.json` locks `release-please` to `17.6.0`, so the script runs the CLI at that exact version: `npx --yes release-please@17.6.0`, with the npm cache under `~/.cache/dentalcraft-ci/npm`.
+- To re-check after the action moves:
+
+  ```sh
+  gh api 'repos/googleapis/release-please-action/contents/package-lock.json?ref=v5' --jq .content | base64 -d | jq '.packages["node_modules/release-please"].version'
+  ```
+
+**Before it runs:**
+- Local `main` must equal the freshly fetched `origin/main`.
+- `ci-local` must have passed on that commit (the pass marker).
+- With `--dry-run`, a missing marker is only a warning.
+
+**What it runs:** the same two calls as the action, in the same order, against the default branch:
+
+```sh
+release-please github-release --repo-url dnviti-personal-org/<repo> --config-file release-please-config.json --manifest-file .release-please-manifest.json --token "$(gh auth token)"
+release-please release-pr     (same flags)
+```
+
+The config and the manifest are read from `main` on GitHub, as the action reads them.
+
+**Chained jobs:**
+- `release_created`/`tag_name` are derived by comparing the release tags before and after `github-release`.
+- When a release was created, the chained jobs run as in the workflow:
+  - app: `binaries`
+  - server: `image`, then `binaries`
+  - core and aligners: none
+
+### `binaries app` (`dentalcraft-app/.github/workflows/binaries.yml`)
+
+**Source:** the tag is checked out from GitHub, not from the submodule. Each matrix entry has its own checkout and `target/`.
+
+**Matrix entries:**
+- `linux_x86_64` builds on this host.
+- `windows_x86_64` builds in a throwaway `registry.fedoraproject.org/fedora:45` container (`podman run --rm`):
+  - The container installs the workflow's dnf packages (`gcc make pkgconf-pkg-config mingw64-gcc zip`) plus `git-core openssh-clients`.
+  - It installs rustup with 1.99.1 and `x86_64-pc-windows-gnu`, and writes the `insteadOf` and known_hosts setup to its own global git config and `~/.ssh`.
+  - Your SSH agent socket is mounted into it.
+  - rustup and the cargo registry are kept in `~/.cache/dentalcraft-ci/app-binaries/windows_x86_64/{rustup,cargo-home}`, so a rerun does not download them again.
+  - The Fedora image is removed afterwards if the run pulled it.
+  - The rootless pause process (`catatonit`) is stopped only if it was not running before and no container is left.
+
+**Build and package steps:** the workflow's Build and Package steps are passed through verbatim. They keep:
+- the same `RUSTFLAGS` remaps;
+- `cargo build -p dc-app -p dc-cli --release --target <triple>` without `--locked`;
+- the archive names `dentalcraft_<version>_<name>`;
+- the `LICENSES/` font licences and the README.
+
+**Attach to release:**
+- It requires exactly 2 archives, then writes `SHA256SUMS`.
+- It runs `gh release upload --clobber`.
+- It runs the same `<!-- binaries-note -->` release-notes step.
+
+**Flags:**
+- `--only <name>` builds one entry and stops after packaging.
+- `--no-upload` stops before the upload.
+- `--out DIR` copies the archives to DIR.
+
+### `binaries server` (`dentalcraft-server/.github/workflows/binaries.yml`)
+
+- It checks the tag, uses the `go.mod` toolchain, and runs the verbatim build loop:
+  - 5 targets: `linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64`;
+  - `-trimpath -ldflags "-s -w -X main.version=<version>"`;
+  - root-owned tarballs, a zip for Windows, and `SHA256SUMS`.
+- The upload is the workflow's `curl` script: it replaces assets of the same name. The token comes from `gh auth token`.
+- If `zip` is missing, the run fails instead of installing it.
+
+### `image server` and `web-image`
+
+`podman build --format docker --pull=always --layers=false` builds the image with the workflow's tags, build args and OCI labels. The `docker` format keeps the Dockerfile `HEALTHCHECK`; the OCI format would drop it, while buildx keeps it.
+
+| Image | Tags | Build arg | Labels |
+|---|---|---|---|
+| `ghcr.io/dnviti-personal-org/dentalcraft-server` | `:<version>`, `:latest` | `VERSION` | `source`, `version`, `revision` (= tag commit) |
+| `ghcr.io/dnviti-personal-org/dentalcraft-web` | `:latest`, `:sha-<7>`, plus `:<version>` for a `v*` ref | none | `version` = version or commit sha |
+
+**Login and push:**
+- The script logs in to ghcr.io with `gh auth token`, through a temporary `--authfile` that it deletes afterwards.
+- Pushing needs the `write:packages` scope. The script checks for it and otherwise tells you to run `gh auth refresh -h github.com -s write:packages`.
+- `--no-push` builds, prints the labels, and stops.
+
+**Cleanup:** afterwards the built tags are removed, and so are base images that were not present before the run.
+
+`web-image` first downloads the app archives named in `content/site.data.json` with `gh release download`. Your gh token stands in for the `APP_RELEASE_TOKEN` secret.
+
+Run it after pushing dentalcraft-web `main` or a `v*` tag:
+- `--ref main` (the default) gives the push-to-main run.
+- `--ref vX.Y.Z` gives the tag run.
+
+## `scripts/actions-status.sh`
+
+```sh
+scripts/actions-status.sh status            # read-only
+scripts/actions-status.sh on  [--dry-run]   # restore the recorded original state
+scripts/actions-status.sh off [--dry-run]   # cancel queued runs, then switch Actions off
+```
+
+**How Actions were switched off:**
+- The switch is at repository level (`gh api repos/<org>/<repo>/actions/permissions`, `enabled=false`).
+- All workflows are still `active`.
+
+**What the scripts change:**
+- `on` and `off` only change that switch. They use `PUT .../actions/permissions -F enabled=<bool>`.
+- They do not send `allowed_actions`, so GitHub keeps the previous policy.
+- The original state is in `scripts/actions-state.tsv`: every repository had Actions enabled, with last runs between 2026-10-31 and 2026-11-02.
+
+**After `on`:** check that `release-please.yml` does not run on the next push to `main` while a local release is half-done.
+
+## Differences from the runner that cannot be avoided
+
+- **Token identity:**
+  - Locally, release-please, the release and the release PR act as your user, not as `github-actions[bot]`.
+  - While Actions are off, nothing is triggered by that.
+  - Once Actions are back on, tags and PRs created with a user token would trigger workflows. `GITHUB_TOKEN` events never trigger them.
+- **Deploy keys:** your SSH agent replaces the read-only deploy keys `DEPLOY_KEY_CORE`/`DEPLOY_KEY_ALIGNERS`. It can read at least as much, so builds are the same.
+- **C toolchain:** the runner installs `gcc` (and `zip`) when missing. The scripts require them and never install packages on the host.
+- **Container image manifest:** `docker/build-push-action@v7` (buildx) adds a provenance attestation by default, so the image it pushes is an OCI index with an attestation manifest. Podman pushes a single Docker v2 manifest, without the attestation. Tags, labels, build args, `HEALTHCHECK` and the Dockerfile stages are the same; layer digests can differ, because the builder and the base-image pull time differ.
+- **Cache:** `rust-cache` restores `~/.cargo/registry`, `~/.cargo/git` and `target/` keyed by the lockfile; locally they simply persist. Run `scripts/ci-local.sh clean` to start from nothing, like a cache miss.
+- **Concurrency groups:** concurrency groups are replaced by a `flock` per tag or ref, so runs queue rather than run at the same time.
+- **Windows build environment:** the Windows build runs in a Fedora container, not on the Ubuntu-like runner image. The toolchain is mingw-w64 GCC either way, and the target triple, flags and packaging are the same.
+- **Tag-push runs:** `ci.yml` also triggers on `v*` tags, but tags created by `GITHUB_TOKEN` never trigger it on GitHub. There is nothing to replay.
+
+## Known flaky test
+
+REDACTED
+- The test clock starts at the real `time.Now()` and is advanced by 3 s.
+- When a run starts within 3 s before a minute boundary, the per-minute rate-limit summary splits into two entries.
+- This is a test bug, not a local-CI difference: it can fail on the runner as well.

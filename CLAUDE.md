@@ -2,15 +2,19 @@
 
 Guidance for AI agents working in this repository. Read `README.md` and `docs/plan/HANDOFF.md` first.
 
-## Current mode: local-only, speed first (from 2026-10-31, until the user revokes it)
+## Current mode: GitHub Actions suspended, local CI and release (from 2026-11-07, until the user re-enables them)
 
-This rule overrides "Versioning workflow" and "CI notes" below.
+The user disabled GitHub Actions on every repo for performance. This replaces the earlier local-only mode (2026-10-31). The "Versioning workflow" and "CI notes" below still describe the runners: they are the reference that must be reproduced locally, step by step. Full procedure: [`docs/local-ci.md`](docs/local-ci.md).
 
-- Do all work locally, git included: commit on local branches (or local `main`). Never `git push`, never open PRs, never trigger or wait for CI, and never tag or cut releases.
-- Build and test locally only, inside the superproject, so the `.cargo/config.toml` `[patch]` uses the submodule working trees. No tag bumps between repos. Run `git checkout -- Cargo.lock` in a submodule before committing it.
-- Priority: finish the features that make up the application by porting them from the Blender plugin `REDACTED-PATH`. That repo is read-only and is the oracle.
-- Keep the local quality gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`) for the crates you touch.
-- When the user ends this mode, push the branches and run the normal release flow.
+- **Never touch the runner setup.** Leave `.github/workflows/*`, `release-please-config.json`, `.release-please-manifest.json` and the deploy-key secrets exactly as they are in every repo. Actions are suspended, not removed. Re-enable them only when the user decides (`scripts/actions-status.sh on`).
+- **CI is local and identical to the runners.** `scripts/ci-local.sh <repo|super|all> [--ref R] [--pr]` runs the exact workflow commands on a clean checkout of the committed ref, outside the superproject. Without `[patch]`, dependencies resolve to the pinned tags, as on the runner. A green dev build inside the superproject is not CI: never merge, release or call work done without a green `ci-local.sh` on the exact commit. A PR is tested with `--pr`, which uses the merge into `origin/main`, like `refs/pull/N/merge`.
+- **PRs and merges.** Work on `feat/*` / `fix/*`, push the branch and open the PR as before. Merge with `scripts/pr-merge-local.sh <repo> <pr>`: it runs the local CI on the PR head, then `gh pr merge --squash --admin --match-head-commit <sha>`. Squash titles are conventional commits, because release-please reads them.
+- **Versioning is the real release-please.** `scripts/release-local.sh <repo>` runs the release-please CLI version bundled by `release-please-action@v5`, with the repo config and manifest. Like the action, it runs `github-release` first, then `release-pr`. It refuses unless local `main` == `origin/main` and the local CI passed on that commit.
+  - Merging the release PR and re-running the script creates the tag and the GitHub release. It then runs the chained jobs locally: app binaries (linux on the host, windows in a throwaway podman container), and server binaries and ghcr image.
+  - Never hand-edit versions, CHANGELOGs or manifests, and never create tags by hand.
+- **Push is manual and allowed** for this flow: feature branches, PR merges, release-please. Then bump the consumer pins and the superproject gitlinks as in the "Versioning workflow" below.
+- **Development loop.** Building and testing inside the superproject (with `[patch]`) stays the fast inner loop. Keep the per-crate gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`). Run `git checkout -- Cargo.lock` in a submodule before committing it.
+- **Priority.** Finish the application features by porting them from the Blender plugin `REDACTED-PATH`. That repo is read-only and is the oracle.
 
 ## Feature order: one at a time
 
