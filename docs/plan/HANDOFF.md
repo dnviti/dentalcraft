@@ -18,9 +18,33 @@ From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/l
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
-## Current feature: "Separa denti e gengiva" (Separate teeth and gum)
+## Current feature: "Denti 3D" (3D teeth), finishing
 
-Merged into `main` of `dentalcraft-aligners` (PR #7) and `dentalcraft-app` (PR #13) and released in `v0.2.0-alpha.3` (2026-11-12). Spec: `docs/design/ui-spec.md`, section "Separate teeth and gum". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
+Local branch `feat/teeth-3d-finish` in `dentalcraft-aligners` and `dentalcraft-app`: committed locally, not pushed, no PR, no release yet. Spec: `docs/design/ui-spec.md`, section "3D teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one. "Separa denti e gengiva" (below) is released and done.
+
+Done on the branch (2026-11-12):
+
+- App: the tooth marks are hidden over the 3D teeth; the bite scan stays visible, as in the plugin (`dc-workspace/src/view.rs`).
+- Aligners: a closed tooth with non-finite vertices is never kept (the tooth fails with `NotFinite`) and the crossing sweep cannot go quadratic. The NaN could not be reproduced on any input, including the 11-02 snapshot; it is likely plugin-side.
+- Aligners: cancel between teeth and inside the gum solve.
+- Aligners: real-scan oracle `crates/dca-algo/tests/teeth_real.rs` (env `DC_REAL_SCANS` and `DC_TEETH_REAL_ORACLE`; regenerate the oracle with `tests/fixtures/gen_teeth_real.py`). Skipped without the env vars.
+
+Oracle results: scans c and d pass every check; scan a not run yet (`gen_teeth_real.py ... --only a`); scan b fails on teeth 24 (Hausdorff 3.4e-2 mm) and 26 (7e-4 mm).
+
+Root cause of b/24: no port stage is wrong. `close_crown` is chaotically sensitive to rounding: the ring vertices differ by at most 1.07e-14 (`plane_normal` eigen vs SVD), the fair Jacobi preconditioner differs (port `1/diag(A)` in `solve.rs`, plugin `1/(rmask+Σ1/deg²+lam)`), and the CG tolerance 1e-6 amplifies the gap until the untangle after the third taper fair flips one crossing pair. Fed the same rings, each side reproduces the other's result exactly. Replay inputs: `/tmp/dc-teethreal-wKXW` (temporary).
+
+Next:
+
+1. `teeth_real`: compare against the plugin re-run on the port's rings, or make the per-tooth Hausdorff report-only on real scans, keeping finiteness and watertightness strict.
+2. Optional: use the plugin's Jacobi diagonal in the fair solve.
+3. Run scan a.
+4. Profile the about 27 s build on an idle machine.
+REDACTED
+6. Release archives still lack `LICENSE.md` and `THIRD-PARTY-NOTICES.md` (needs authorization to touch `binaries.yml`).
+
+## Released: "Separa denti e gengiva" (Separate teeth and gum)
+
+Merged into `main` of `dentalcraft-aligners` (PR #7) and `dentalcraft-app` (PR #13) and released in `v0.2.0-alpha.3` (2026-11-12). Spec: `docs/design/ui-spec.md`, section "Separate teeth and gum".
 
 Done:
 
@@ -73,18 +97,17 @@ Real-scan oracle test: `dentalcraft-aligners/crates/dca-algo/tests/autoseed_real
 
 The seed check after segmentation and the crown-width verification loop, first deferred to "Denti 3D", are ported (in `aligners.auto`; command `aligners.preparation.segmentation.check`) and released in aligners `v0.2.0-alpha.2`.
 
-## Side request done: "Denti 3D" (3D teeth)
+## Released earlier, being finished now: "Denti 3D" (3D teeth)
 
-Done on `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`), merged into `main` and released in the `.2` alphas. It is a side request, not the current feature. Spec: `docs/design/ui-spec.md`, section "3D teeth".
+First done on `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`), merged into `main` and released in the `.2` alphas. It is the current feature again, see "Current feature" above. Spec: `docs/design/ui-spec.md`, section "3D teeth".
 
 - Leaf `aligners.teeth.build`: closed teeth and gingiva per arch, diagnosis, one undo step, partial rebuild of hand-corrected teeth. Viewport toggle Scan / 3D teeth, gingiva deformed per stage, number chips follow the stage poses, `model` and `stage` in CLI and MCP renders.
-- Performance: the teeth build takes about 27 s per real pair of scans instead of 49 s, with bit-identical output.
+- Performance: the teeth build takes about 27 s per real pair of scans instead of 49 s, with bit-identical output (measured with the machine loaded, load 46 to 70; to profile again on an idle machine).
 
-Known open points of this side request:
+Known open points of this feature:
 
-- The bite scan is still drawn together with the built teeth.
 - The gingiva deformation is tested only on synthetic data (the demo case has no stages).
-- One tooth attempt produces non-finite vertices (the quadratic self-intersection check; also at HEAD).
+- The scan-b oracle failure on teeth 24 and 26 (see "Current feature" above).
 
 ## Known issue for planning: 719-stage anomaly
 
@@ -117,7 +140,7 @@ cd dentalcraft-aligners && git switch main && cargo test      # inside the super
 cd ../dentalcraft-app && git switch main && cargo test
 # real-scan oracle test (needs the scans and the oracle output)
 cd ../dentalcraft-aligners && DC_REAL_SCANS=<scans dir> DC_AUTOSEED_REAL_ORACLE=<oracle dir> cargo test -p dca-algo --test autoseed_real -- --nocapture
-# segmentation oracle: see "Current feature" above (branch feat/separate-teeth-gum)
+# segmentation oracle: see "Released: Separa denti e gengiva" above; teeth oracle: see "Current feature" above
 ```
 
 Read `CLAUDE.md` for the quality gate and the `Cargo.lock` rule (`git checkout -- Cargo.lock` in the submodule before committing).

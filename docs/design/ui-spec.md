@@ -229,6 +229,8 @@ Progress: the job runs in the status bar with the label "Building the 3D teeth" 
 
 Viewport toolbar, right after the arch toggles: a two-segment toggle **Scan** / **3D teeth** (role radio button; tooltips "Show the scans of the arches" / "Show the built teeth and gingiva instead of the scans"). The default is 3D teeth, which show only for arches that were built; an arch not built keeps its scan. The scan is shown whatever the choice while the brush, the clean-up or the seed tools are open (they paint and read the scan labels) and while the **Contact map** layer is on; the toggle then shows Scan and its tooltip adds "The scan is shown while a tool works on it or the contact map is on". Closing the tool or switching the contact map off returns to the 3D teeth. A tool that picks a tooth works on the 3D teeth. The choice is kept for the workspace session.
 
+Tooth marks: the seed markers are not drawn over an arch whose built teeth are shown (the plugin hides its seeds after building the teeth); they are drawn in the Scan view and while a tool shows the scan. The bite scan stays visible and the number chips stay.
+
 Stages: with 3D teeth shown, a later stage poses each tooth by its pose of that stage, the stage 0 ghost draws the rest position, and the **gingiva deforms** with the teeth (blended by weights on the teeth). The weights are slow the first time: they are computed in the background and the gingiva is drawn at rest until they are ready. The scans always stay at rest. Tooth number chips follow the stage poses (see above).
 
 Reachable from CLI and MCP as the command `aligners.teeth.build`; the whole automatic pipeline (`aligners.auto`) runs it after the check of the segmented teeth. `render` takes `model` and `stage` (see Arch selection).
