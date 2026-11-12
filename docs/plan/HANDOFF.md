@@ -42,12 +42,28 @@ rm -r "$out"
 
 Without both variables the test skips itself.
 
-Open points:
+Open points closed (2026-11-12):
 
-- The result line (teeth and seconds) is not shown after reopening a project: the duration is not stored in the case.
-- Preexisting, not from this feature: the mono slider shows a decimal gap ("0. 20").
-- The all-cases segmentation oracle on the demo case (`segmentation_oracle.rs`) is still ignored.
+- The result line (teeth and seconds) now survives reopening a project: the last separation result is stored in the case.
+- The decimal gap in the mono slider value ("0. 20") is fixed (tight decimal point in `dc-ui` `widgets.rs`).
+- The all-cases segmentation oracle on the demo case (`segmentation_oracle.rs`) runs by default (not ignored any more); about 33 s in release CI.
+
+Open point:
+
 - Aligners must be released before the app branch builds standalone: the app uses the new aligners API (settings, `invalidated`), and the standalone build resolves the pinned aligners tag. Release aligners, move the app pin, then merge the app.
+
+## Licence
+
+- DentalCraft is proprietary. Holder: Daniele Viti. The end-user licence (EULA, Italian and English) is `dentalcraft-app/LICENSE.md` and the licence page of the web site (`dentalcraft-web`).
+- Every repository has a source notice `LICENSE.md` (superproject, core, aligners, app, server, web). Branches `chore/licence` in core (`d2d8e00`), server (`eba2d46`) and web (`a2b699e`, `abfef8f`) are committed locally and not pushed yet.
+- The app shows the licence and the third-party notices in the "Licence and notices" dialog (user menu); both files are embedded in the binary.
+- Third-party notices are generated: `scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NOTICES.md`. Rerun it whenever the app dependencies change (see `docs/local-ci.md`).
+
+Known gaps:
+
+- Release archives do not bundle `LICENSE.md` and `THIRD-PARTY-NOTICES.md`: it needs a change in `binaries.yml` and `release-local.sh`; the workflows must stay untouched while Actions are suspended.
+- The MCP server info (core `dc-mcp`) has no copyright line.
+- The app `Cargo.lock` lags the manifest versions (release-please bumps the manifests only).
 
 ## Released: "Trova i denti" (Find the teeth)
 

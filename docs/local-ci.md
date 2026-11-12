@@ -141,6 +141,12 @@ The config and the manifest are read from `main` on GitHub, as the action reads 
   - server: `image`, then `binaries`
   - core and aligners: none
 
+**Before an app release:** regenerate the third-party notices when the app dependencies changed, and commit the result in `dentalcraft-app` (it is embedded in the binary and shown in the "Licence and notices" dialog):
+
+```sh
+scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NOTICES.md
+```
+
 ### `binaries app` (`dentalcraft-app/.github/workflows/binaries.yml`)
 
 **Source:** the tag is checked out from GitHub, not from the submodule. Each matrix entry has its own checkout and `target/`.
