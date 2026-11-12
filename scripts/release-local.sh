@@ -412,6 +412,7 @@ podman_build_push() {
   podman build --format docker --pull=always --layers=false -f "$file" "${BUILD_ARGS[@]}" "${args[@]}" "${targs[@]}" . || rc=$?
   if [ "$rc" = 0 ] && [ "$no_push" = 0 ]; then
     authfile=$(mktemp "$CACHE/auth.XXXXXX.json")
+    echo '{}' >"$authfile"   # podman login parses an existing authfile; mktemp leaves it empty
     if gh auth token | podman login ghcr.io --authfile "$authfile" -u "$(gh api user --jq .login)" --password-stdin; then
       for b in "${tags[@]}"; do
         podman push --authfile "$authfile" "$b" || { rc=$?; break; }
