@@ -1,4 +1,4 @@
-# Handoff, 2026-11-08
+# Handoff, 2026-11-12
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -10,17 +10,17 @@ From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/l
 
 | Submodule | Tag | Notes |
 | --- | --- | --- |
-| `dentalcraft-core` | `v0.3.0-alpha.2` | module scene entries with arch, tooth and stage |
-| `dentalcraft-aligners` | `v0.2.0-alpha.2` | find the teeth, 3D teeth, real-scan autoseed oracle test |
-| `dentalcraft-app` | `v0.2.0-alpha.2` | find the teeth and 3D teeth in the viewport; linux and windows binaries on the release |
-| `dentalcraft-server` | `v0.5.0` | |
-| `dentalcraft-web` | none (`main` `5093413`) | no release-please; downloads point at app `v0.2.0-alpha.2`. Its image (`ghcr.io/dnviti-personal-org/dentalcraft-web`) is not pushed yet: `gh` lacks `write:packages`, so run `gh auth refresh -h github.com -s write:packages`, then `scripts/release-local.sh web-image` |
+| `dentalcraft-core` | `v0.3.0-alpha.2` | module scene entries with arch, tooth and stage. `main` `796bb30` adds only the source notice `LICENSE.md` (chore, no release) |
+| `dentalcraft-aligners` | `v0.2.0-alpha.3` | separate teeth and gum, real-scan segmentation oracle test, source notice |
+| `dentalcraft-app` | `v0.2.0-alpha.3` | separate teeth and gum inspector, EULA, "Licence and notices" dialog, third-party notices; linux and windows binaries on the release |
+| `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
+| `dentalcraft-web` | none (`main` `2498eb2`) | no release-please; licence page, downloads point at app `v0.2.0-alpha.3`. Image `ghcr.io/dnviti-personal-org/dentalcraft-web:latest` and `:sha-2498eb2` pushed (digest `sha256:cd1ac5ef558f1e4f60a2085515a4154e94b2730fd5d5f44079f7ea6b15971231`); the hosting platform service `dentalcraft-web` is not rolled out to it |
 
-The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags.
+The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
 ## Current feature: "Separa denti e gengiva" (Separate teeth and gum)
 
-Branch `feat/separate-teeth-gum` in `dentalcraft-aligners` and `dentalcraft-app` (local, not pushed, no PR; from `main` at the `.2` alphas). Spec: `docs/design/ui-spec.md`, section "Separate teeth and gum". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
+Merged into `main` of `dentalcraft-aligners` (PR #7) and `dentalcraft-app` (PR #13) and released in `v0.2.0-alpha.3` (2026-11-12). Spec: `docs/design/ui-spec.md`, section "Separate teeth and gum". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one.
 
 Done:
 
@@ -48,14 +48,10 @@ Open points closed (2026-11-12):
 - The decimal gap in the mono slider value ("0. 20") is fixed (tight decimal point in `dc-ui` `widgets.rs`).
 - The all-cases segmentation oracle on the demo case (`segmentation_oracle.rs`) runs by default (not ignored any more); about 33 s in release CI.
 
-Open point:
-
-- Aligners must be released before the app branch builds standalone: the app uses the new aligners API (settings, `invalidated`), and the standalone build resolves the pinned aligners tag. Release aligners, move the app pin, then merge the app.
-
 ## Licence
 
 - DentalCraft is proprietary. Holder: Daniele Viti. The end-user licence (EULA, Italian and English) is `dentalcraft-app/LICENSE.md` and the licence page of the web site (`dentalcraft-web`).
-- Every repository has a source notice `LICENSE.md` (superproject, core, aligners, app, server, web). Branches `chore/licence` in core (`d2d8e00`), server (`eba2d46`) and web (`a2b699e`, `abfef8f`) are committed locally and not pushed yet.
+- Every repository has a source notice `LICENSE.md` (superproject, core, aligners, app, server, web), merged into `main` everywhere on 2026-11-12 (core PR #11, server PR #14, web PR #2, aligners and app with the feature).
 - The app shows the licence and the third-party notices in the "Licence and notices" dialog (user menu); both files are embedded in the binary.
 - Third-party notices are generated: `scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NOTICES.md`. Rerun it whenever the app dependencies change (see `docs/local-ci.md`).
 
