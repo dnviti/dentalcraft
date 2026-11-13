@@ -1,4 +1,4 @@
-# Handoff, 2026-11-12
+# Handoff, 2026-11-13
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -11,7 +11,7 @@ From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/l
 | Submodule | Tag | Notes |
 | --- | --- | --- |
 | `dentalcraft-core` | `v0.3.0-alpha.2` | module scene entries with arch, tooth and stage. `main` `796bb30` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-aligners` | `v0.2.0-alpha.3` | separate teeth and gum, real-scan segmentation oracle test, source notice |
+| `dentalcraft-aligners` | `v0.2.0-alpha.4` | 3D teeth finish (non-finite guard, cancel, faster untangle), teeth basis for "out of date", menu grouped by function with the manual tools out of the menu, delete a tooth mark (PR #9, release PR #10, 2026-11-13) |
 | `dentalcraft-app` | `v0.2.0-alpha.3` | separate teeth and gum inspector, EULA, "Licence and notices" dialog, third-party notices; linux and windows binaries on the release |
 | `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
 | `dentalcraft-web` | none (`main` `2498eb2`) | no release-please; licence page, downloads point at app `v0.2.0-alpha.3`. Image `ghcr.io/dnviti-personal-org/dentalcraft-web:latest` and `:sha-2498eb2` pushed (digest `sha256:cd1ac5ef558f1e4f60a2085515a4154e94b2730fd5d5f44079f7ea6b15971231`); the hosting platform service `dentalcraft-web` is not rolled out to it |
@@ -20,7 +20,7 @@ The `.1` alphas include scan import and the simple left menu (six groups, eight 
 
 ## Current feature: "Denti 3D" (3D teeth), finishing
 
-Local branch `feat/teeth-3d-finish` in `dentalcraft-aligners` and `dentalcraft-app`: committed locally, not pushed, no PR, no release yet. Spec: `docs/design/ui-spec.md`, section "3D teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one. "Separa denti e gengiva" (below) is released and done.
+Branch `feat/teeth-3d-finish` of `dentalcraft-aligners` and `dentalcraft-app` merged into `main` on 2026-11-13: aligners PR #9, released in `v0.2.0-alpha.4`; app PR #15 (pins aligners `v0.2.0-alpha.4`), not released. The app, core and server releases wait for the user's release request (all repos together). Spec: `docs/design/ui-spec.md`, section "3D teeth". Per CLAUDE.md, finish this feature before moving on, and wait for the user to ask for the next one. "Separa denti e gengiva" (below) is released and done.
 
 Done on the branch (2026-11-12):
 
@@ -29,18 +29,37 @@ Done on the branch (2026-11-12):
 - Aligners: cancel between teeth and inside the gum solve.
 - Aligners: real-scan oracle `crates/dca-algo/tests/teeth_real.rs` (env `DC_REAL_SCANS` and `DC_TEETH_REAL_ORACLE`; regenerate the oracle with `tests/fixtures/gen_teeth_real.py`). Skipped without the env vars.
 
-Oracle results: scans c and d pass every check; scan a not run yet (`gen_teeth_real.py ... --only a`); scan b fails on teeth 24 (Hausdorff 3.4e-2 mm) and 26 (7e-4 mm).
+Done on 2026-11-13 (merged, aligners PR #9):
 
-Root cause of b/24: no port stage is wrong. `close_crown` is chaotically sensitive to rounding: the ring vertices differ by at most 1.07e-14 (`plane_normal` eigen vs SVD), the fair Jacobi preconditioner differs (port `1/diag(A)` in `solve.rs`, plugin `1/(rmask+Σ1/deg²+lam)`), and the CG tolerance 1e-6 amplifies the gap until the untangle after the third taper fair flips one crossing pair. Fed the same rings, each side reproduces the other's result exactly. Replay inputs: `/tmp/dc-teethreal-wKXW` (temporary).
+- `teeth_real`: two-tier closed-tooth rule. Finiteness, watertightness, manifoldness and the tooth set stay strict. A tooth within `HAUSDORFF_MM` (1e-4 mm) must match every info-dict number. A tooth above it counts as a rounding divergence: it is printed with its info differences and fails only above `HAUSDORFF_DIVERGED_MM` (0.1 mm).
+- Performance (`reconstruct/fair.rs` `untangle`, `reconstruct/geom.rs` new `Crossings`): smoothing sums only the moved vertices' neighbours, and the self-intersection search re-tests only pairs touching moved triangles. Output is byte-identical (old against new binary, pairs ab 90/90 and cd 87/87 files; the oracle numbers below are unchanged). Code review approved it. Unit test `crossings_follow_moved_vertices_like_a_full_search`.
+- Teeth build, median of 3 (load not fully idle; old and new binaries run back to back): pair ab 27.2 s → 19.3 s, pair cd 4.6 s → 3.5 s. Profile per tooth: `fair` about 45% (CG solve `solve.rs:143` most of it), self-intersection search about 40% before the change.
+
+Oracle results (plugin re-run 2026-11-13, with the speed-up):
+
+| Scan | Result | Closed teeth: worst Hausdorff | Diverged |
+| --- | --- | --- | --- |
+| a | pass | 1.60e-4 mm | 46 (1.60e-4 mm, info equal; would have failed the old 1e-4 bound) |
+| b | pass | 3.41e-2 mm | 24 (3.41e-2 mm; `contact_filled`, `despiked`, `sharp_left` differ), 26 (7.04e-4 mm, info equal) |
+| c | pass | 9.1e-7 mm | none |
+| d | pass | 2.8e-6 mm | none |
+
+Root cause of b/24: no port stage is wrong. `close_crown` is chaotically sensitive to rounding: the ring vertices differ by at most 1.07e-14 (`plane_normal` eigen vs SVD), the fair Jacobi preconditioner differs (port `1/diag(A)` in `solve.rs`, plugin `1/(rmask+Σ1/deg²+lam)`), and the CG tolerance 1e-6 amplifies the gap until the untangle after the third taper fair flips one crossing pair. Fed the same rings, each side reproduces the other's result exactly. Using the plugin's Jacobi diagonal was not done: it delays the drift but never gives bit identity, and it would change the port's output.
+
+Save everything and automatic save (2026-11-13, merged in `dentalcraft-app` PR #15; the user reported brush strokes and tooth marks gone after Save and reopen). Spec: `docs/design/ui-spec.md`, "Saving" (workspace) and "Out of date" / "Out-of-date arch" (3D teeth).
+
+- Root causes. (1) The user's file held the corrections (`dirty` 36, 45, 46, 47 = brush strokes made after the build), but a reopened case shows the 3D teeth by default, built before the strokes, with the marks hidden: the corrections looked lost. (2) Save during a running command (or a field committed in the same frame) wrote the older state and said "Project saved"; the late change stayed unsaved. (3) Closing the window never asked and could cut a save. (4) No automatic save; Save was disabled while a save ran.
+- Fix. An arch whose built teeth are out of date shows its scan, colours and marks; the 3D teeth inspector says "Out of date". `Workspace::tick` saves a project with a file 2 s after the last change (never during a job, a save or a dialog; quiet status Saving… / Saved / Unsaved changes / Not saved; a failure is an error toast). One save at a time, the next one queued. Home, Ctrl+W and closing the window save first (a project never saved asks); `DentalCraftApp::close_requested` holds the window until then.
+- Tests: `dc-workspace/tests/save.rs` (every registered command classified; each one that can change the case runs through the workspace, Ctrl+S, reopen, compare case, module data, meshes and step history; undo; the automatic save on a simulated clock), `dc-app/tests/close.rs`, `view.rs` `built_teeth_tests`.
+- Not covered: a project never saved is not saved automatically (by design, nothing asks for a file); the CLI session (`dc-session`) has no automatic save; quitting during a job saves the case as it is and drops the job's result; the clicks of a numbering in order not finished are not in the case.
+- Follow-up (same day, merged in `dentalcraft-aligners` PR #9, `v0.2.0-alpha.4`): the 3D teeth of an arch are out of date after any change of its marks too (placed, moved, deleted, renumbered, missing, cleared, numbered in order), not only the brush. `dca-model` records what each arch was built from (`AlignersState::teeth_basis`, a defaulted field, no schema change) and `teeth_out_of_date` compares it with the case; `dca-module` records it at the end of `aligners.teeth.build` and `reconstruction.automatic`, and the manual rebuild brings it up to date once nothing is left to rebuild. Find the teeth and the separation run again clear the 3D teeth instead. Tests: `dca-model` `built_teeth_are_out_of_date_when_the_colours_or_marks_of_their_arch_change`, `dc-workspace/tests/outdated_teeth.rs`.
 
 Next:
 
-1. `teeth_real`: compare against the plugin re-run on the port's rings, or make the per-tooth Hausdorff report-only on real scans, keeping finiteness and watertightness strict.
-2. Optional: use the plugin's Jacobi diagonal in the fair solve.
-3. Run scan a.
-4. Profile the about 27 s build on an idle machine.
+1. Release the app (and every other repo with pending work) when the user asks for a release.
+2. Optional speed-ups not done (estimates): fuse the CG vector passes in `solve.rs:143` (exact, 25–35% of the solve); pass the existing edge list into `fair` instead of rebuilding it (`fair.rs:102`); profile `gingiva::gum_weights` (8.8 + 5.7 s on pair ab, outside the build).
 REDACTED
-6. Release archives still lack `LICENSE.md` and `THIRD-PARTY-NOTICES.md` (needs authorization to touch `binaries.yml`).
+4. Release archives still lack `LICENSE.md` and `THIRD-PARTY-NOTICES.md` (needs authorization to touch `binaries.yml`).
 
 ## Released: "Separa denti e gengiva" (Separate teeth and gum)
 
@@ -102,12 +121,12 @@ The seed check after segmentation and the crown-width verification loop, first d
 First done on `feat/teeth-3d` in `dentalcraft-core`, `dentalcraft-aligners` and `dentalcraft-app` (from `feat/find-teeth`), merged into `main` and released in the `.2` alphas. It is the current feature again, see "Current feature" above. Spec: `docs/design/ui-spec.md`, section "3D teeth".
 
 - Leaf `aligners.teeth.build`: closed teeth and gingiva per arch, diagnosis, one undo step, partial rebuild of hand-corrected teeth. Viewport toggle Scan / 3D teeth, gingiva deformed per stage, number chips follow the stage poses, `model` and `stage` in CLI and MCP renders.
-- Performance: the teeth build takes about 27 s per real pair of scans instead of 49 s, with bit-identical output (measured with the machine loaded, load 46 to 70; to profile again on an idle machine).
+- Performance: the teeth build takes about 19 s on pair ab and 3.5 s on pair cd (2026-11-13, see "Current feature"); the earlier 27 s was 49 s before the first optimization.
 
 Known open points of this feature:
 
 - The gingiva deformation is tested only on synthetic data (the demo case has no stages).
-- The scan-b oracle failure on teeth 24 and 26 (see "Current feature" above).
+- The scan-b oracle divergence on teeth 24 and 26 (rounding, see "Current feature" above; within the 0.1 mm bound).
 
 ## Known issue for planning: 719-stage anomaly
 

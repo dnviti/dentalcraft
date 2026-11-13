@@ -66,6 +66,9 @@ REDACTED
 Auth integration test (off by default, needs the Go server):
 `cd dentalcraft-app && DC_AUTH_IT=1 cargo test -p dc-auth-client --test server_it -- --ignored --nocapture`.
 
+**After every change, build the release binaries locally so the user can test** (inside the superproject, so the `[patch]` working trees are included):
+`cd dentalcraft-app && cargo build --release --workspace --bins && git checkout -- Cargo.lock` → `target/release/dentalcraft` and `target/release/dentalcraft-cli`.
+
 ## Local `[patch]` and Cargo.lock
 
 `.cargo/config.toml` redirects the git dependencies on core and aligners to the working trees, but only for builds started inside this superproject. Standalone builds (CI, a submodule cloned alone) use the pinned git tags. `net.git-fetch-with-cli = true` makes cargo use the git CLI (SSH agent, credential helpers).
@@ -100,6 +103,14 @@ Internal path dependencies must not carry a `version =` requirement (release-ple
 - Design source: `docs/design` (`tokens.json`, `ui-spec.md`, `screens/`). Build UI from the `dc-ui` widgets and tokens, not ad-hoc styling.
 - Every user-visible string is a Fluent key, in English and Italian (`i18n/{en,it}/<crate>.ftl`). Tests check key parity between languages. Never hard-code text.
 - Module name: "Aligners" (en) / "Allineatori" (it); id `aligners`.
+- **Menu law (user rule, 2026-11-13, applies everywhere):**
+  - The left menu is grouped by function, never by "automatic" vs "manual".
+  - Clicking a menu item only selects it and shows its inspector on the right. It never starts a computation, a dialog or a tool, whether the step is done or not.
+  - The inspector of a function shows everything about that function:
+    - its parameters;
+    - the button that starts the automatic run ("Run", or "Run again" when done);
+    - its manual corrections and tools, when it has any.
+  - Keyboard shortcuts follow the same law: they select the function, they never run it.
 
 ## `.dcprj` format (v1)
 
