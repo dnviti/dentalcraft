@@ -25,10 +25,10 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 43 |
-| PARTIAL | 29 |
-| MISSING | 16 (2 by decision: AI classifier, live test) |
-| STUB | 4 |
+| DONE | 49 |
+| PARTIAL | 26 |
+| MISSING | 14 (2 by decision: AI classifier, live test) |
+| STUB | 3 |
 | N/A | 5 |
 
 Cross-cutting known defects:
@@ -110,12 +110,12 @@ Cross-cutting known defects:
 
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
-| 7.1 | `oa.auto_setup` `P/ops_plan.py:24`; parameters `cons_*`, `midline`, `priority`, `expansion_*`, `advance_max`, `retract_max`, `ipr_*`, `leveling`, `vertical_max`, `close_spaces` `P/props.py:388-468`; page `P/ui_phases.py:579` | `aligners.planning.setup.automatic` `C/setup.rs:34`; `A/setup.rs` (`Params` `:1871`, `setup/line.rs`, `setup/crown.rs`); FN SETUP (only the Adjust tool) `TD:85` | PARTIAL | See the list below the table | `T/setup_oracle.rs` (6 demo cases, one arch, no lock, no line, no opposing arch) |
-| 7.2 | `oa.reset_setup` `P/ops_plan.py:43` | — (per-tooth reset only, see 7.3) | MISSING | A command to clear the whole final position | — |
-| 7.3 | `oa.adjust_tooth`, `oa.reset_tooth`, `oa.setup_tooth_edit`, lock (`OA_Tooth.locked` `P/props.py:274`) `P/ops_plan.py:90,114`, `P/ops_manual.py:921` | `aligners.planning.movements` `C/manual.rs:72` (clinical components, `delta`, `absolute`, `reset`, `lock`, `stage`, `refuse_on_collision`; `M/manual/adjust.rs:77`); Tool::Adjust `TD:190`, `W/manual.rs:1345-1349` | PARTIAL | No −/+ step buttons with a step size (`adjust_step_mm`/`_deg`); no per-tooth movement flags (`A/diagnosis/classify.rs:153` unused); no exact absolute clinical values | unit |
+| 7.1 | `oa.auto_setup` `P/ops_plan.py:24`; parameters `cons_*`, `midline`, `priority`, `expansion_*`, `advance_max`, `retract_max`, `ipr_*`, `leveling`, `vertical_max`, `close_spaces` `P/props.py:388-468`; page `P/ui_phases.py:579` | `aligners.planning.setup.automatic` `C/setup.rs` (`run_resolved`: stored settings, keys given win); `A/setup.rs` (`Params`, `Params::from_settings`, `setup/line.rs`, `setup/crown.rs`); settings `SetupSettings` in `dca-model/src/settings.rs` (plugin defaults and slider ranges `NUMBERS`), command `aligners.settings.setup` (`C/setup.rs`); result per arch `Setup::results` (`SetupSummary`); FN SETUP: result under the status, Parameters in the plugin's groups, `W/setup.rs` | DONE | See the list below the table | `T/setup_oracle.rs`: 6 demo cases with the default settings and 6 with every setup parameter away from its default (`golden/fixtures/*/setup/setup_params.json`, oracle `SETUP_PARAMS`), poses within 1e-12 mm; the configuration from the settings equals the plugin's `conservative_config`. Unit: `C/setup.rs` (settings range and round trip, stored settings used, result stored), `W/setup.rs`, save round trip. One arch, no lock, no line, no opposing arch in the oracle |
+| 7.2 | `oa.reset_setup` `P/ops_plan.py:43` | `aligners.planning.setup.reset` `C/setup.rs` (`arch` optional), `AlignersState::reset_setup` (poses, IPR, line used, result, the arch's aligners; locks, drawn line and settings kept, as `case_plan.reset_setup`); button "Back to the initial position" in the Manual corrections of FN SETUP | DONE | — | `C/setup.rs` `reset_takes_the_final_position_back_like_the_plugin`, save round trip |
+| 7.3 | `oa.adjust_tooth`, `oa.reset_tooth`, `oa.setup_tooth_edit`, lock (`OA_Tooth.locked` `P/props.py:274`) `P/ops_plan.py:90,114`, `P/ops_manual.py:921` | `aligners.planning.movements` (clinical components, `delta`, `absolute`, `exact` = the whole movement from rest, `reset`, `lock` true/false, `stage`, `refuse_on_collision`; `M/manual/adjust.rs`); Tool::Adjust `W/manual.rs` `adjust_controls`: − and + per component with the steps `adjust_step_mm`/`_deg` (case settings), lock box, "Reset the tooth", the notes of `A/diagnosis/classify.rs` `movement_flags` (stable `id`, worded in en/it), the exact values and "Write the exact values" | DONE | The plugin's "exact values" dialog adds increments from 0 (`OA_OT_setup_tooth_edit`); the port writes the whole movement, prefilled with the current one, as asked | `M/manual/tests.rs` `exact_values_set_the_whole_movement_and_a_tooth_is_unlocked`, `W/manual.rs` tests (steps, exact, quiet lock, kittest panel), save round trip |
 | 7.4 | `oa.tooth_grab` / `_end` (gizmo on the tooth axes, centre of resistance) `P/ops_plan.py:128,179` | `aligners.components.transform` + `W/select.rs` | PARTIAL | Same branch as 4.4 | `C/components.rs` tests |
-| 7.5 | `oa.arch_line_show` / `_edit` / `_apply` / `_reset` / `_hide` `P/ops_plan.py:200-303` | setup `line` parameter `A/setup.rs:1936`; stored `Setup::lines` | PARTIAL | CLI only: no line in the viewport, no point editing, no "save without recompute", no back to automatic | `C/setup.rs:507-535` test |
-| 7.6 | Ghost of the final target (`ghost_final` `P/props.py:711`) | layer "target" `W/view.rs:1066` → toast "not available" | STUB | Draw the final pose ghost | — |
+| 7.5 | `oa.arch_line_show` / `_edit` / `_apply` / `_reset` / `_hide` `P/ops_plan.py:200-303`; `case_plan.show_arch_line`, `read_arch_line`, `store_arch_line`, `reset_arch_line` `P/case_plan.py:282-385` | `aligners.planning.setup.line` `C/setup_line.rs` (`arch`, `points`, `recompute` default true; no points = back to automatic); drawn line kept in `Setup::drawn` (the plugin's `oa_arch_line`), used by every later setup (`C/setup.rs`, `line=arch_line_stored`), moved with its arch (`C/occlusion.rs` `move_arch`), dropped with the arch's tooth colours or scan; tool node `TD`; Tool::ArchLine in FN SETUP, `W/archline.rs` (line drawn in front for both arches, 11 points on Blender's automatic-handle Bézier, drag on the occlusal plane, Apply = 24 samples per segment, "Compute the final position again", "Back to the automatic line", Hide / Show, final ghost while shown) | DONE | Differences: before the first final position there is no line to show (the plugin computes one from the cusps at rest); no "show the automatic line" while a drawn one is in force (`auto=True`); a failed recompute changes nothing (the plugin keeps the stored line) | `C/setup_line.rs` tests (store and recompute, store only, back to automatic, moves with the arch); `W/archline.rs` tests (curve, resample, drag plane, open runs nothing, Hide/Show, Apply in one undo step, back); `W/tests/save.rs` |
+| 7.6 | Ghost of the final target (`ghost_final` `P/props.py:711`, `animation.set_ghost` `P/animation.py:485`) | layer "Target position" (`overlay::Layers::target`, `W/view.rs` `toggle_target_layer`); `W/view.rs` `scene_meshes`: the 3D teeth, or the crowns of a scan, at the final pose by `overlay::tooth_move` (rest · pose · rest⁻¹, centre of resistance), token `model_target` at 25 %, not pickable, ids `FINAL_GHOST`, at any stage | DONE | Not saved with the case (a view layer, as the other layers) | `W/view.rs` `built_teeth_tests` (transform checked against rest · pose · rest⁻¹ and against a stage with the same pose, at stages 0-2; crowns-only scan ghost; layer needs a final position; hidden arch) |
 
 Gaps of 7.1:
 - (a) Fixed: it was the source of the 719-stage anomaly (quaternion `w < 0`).
@@ -123,8 +123,8 @@ Gaps of 7.1:
 - (c) Corrected on 2026-11-14. The plugin does **not** coordinate the upper arch line with the lower one: in plugin 42e6d87, `coordination()` (`P/case_plan.py:150`) is dead code (`run_setup` sets `coord = None`, nothing calls `_setup_line()`, `coord_changed()` returns False). The two live parts are ported (2026-11-14):
   - The refusal when both arches have their teeth and are not related (`:386-389`): `A/occlusion.rs` `bite_needed` and `C/setup.rs`. The Final position inspector shows "Bite first", pointing to Bite.
   - In auto, the virtual occlusion before the setup (`P/case_auto.py:424-434`), see 1.7.
-- (d) No parameters in the inspector and no `aligners.settings.setup`: the parameters exist only as CLI overrides.
-- (e) The result is not shown: expansion, advancement, IPR total, distalisation, residual crowding, log lines.
+- (d) Done (2026-11-14): `SetupSettings`, `aligners.settings.setup`, Parameters in the inspector; the run reads them, CLI keys still win. In plugin 42e6d87 the midline CENTER fails on every demo case (`setup_conservativo._targets`, `r["k"]` 0-d, IndexError), so the oracle's non-default case uses BALANCE.
+- (e) Done (2026-11-14): expansion, incisors, IPR total and contacts, the log lines the plugin's page shows, the crowding not resolved; kept in the case. Distalisation: the plugin's `run_setup` always writes `"distal": {}` in 42e6d87, so there is nothing to show.
 
 ## 8. Staging, aligners and calendar
 
