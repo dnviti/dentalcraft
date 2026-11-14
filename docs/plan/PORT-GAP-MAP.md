@@ -25,10 +25,10 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 51 |
-| PARTIAL | 25 |
-| MISSING | 13 (2 by decision: AI classifier, live test) |
-| STUB | 3 |
+| DONE | 55 |
+| PARTIAL | 24 |
+| MISSING | 11 (2 by decision: AI classifier, live test) |
+| STUB | 2 |
 | N/A | 5 |
 
 Cross-cutting known defects:
@@ -52,7 +52,7 @@ Cross-cutting known defects:
 | 1.4 | `oa.create_case` (Blender mesh as the case) `P/ops_import.py:79` | — | N/A | No Blender scene | — |
 | 1.5 | `oa.demo` `P/ops_import.py:104` | `aligners.demo` `C/demo.rs:19`; `A/demo.rs` | DONE | CLI/MCP only; not in the menu (the plugin has it under "Altri modi di iniziare") | `T/foundations_oracle.rs` (demo replayed vertex by vertex), `T/autoseed_demo.rs` |
 | 1.6 | `oa.make_base` (close an open scan with a base) `P/ops_seeds_seg.py:115`, `P/aligner.py:1683`; `base_height` `P/props.py:385` | `aligners.case.make-base` `C/make_base.rs` (params `arch`, `height_mm` 0.5-20, default 3); `A/scan_base.rs`; IMPORT inspector "Open scan: close with a base" (height, a button per arch scan) `W/ui.rs` | DONE | Deviation: the base follows an occlusal side flipped by hand (the plugin's `compute_frame` there forgets it). The flat cap is ear-clipped (Blender: beauty fill), same area | `T/scan_base_oracle.rs` (plugin in Blender, `T/fixtures/gen_make_base.py`: counts, plane, points 1e-4 mm, volume and area 1e-5), unit, `W/tests/save.rs` |
-| 1.7 | `oa.auto_analyze` `P/ops_import.py:291`; `api.auto` `P/api.py:210` | `aligners.auto` `C/auto.rs:88`; `TD:25` | PARTIAL | The bite before the final position is done (2026-11-14). With two arches not related, the bite runs between diagnosis and setup, with the plugin's warning (`P/case_auto.py:424-434`). Still missing: no classifications step; no `start` step; all or nothing (the plugin keeps the finished phases on Esc) | `dc-cli/tests/aligners_pipeline.rs`; `C/auto.rs` tests (plugin order, bite before the setup) |
+| 1.7 | `oa.auto_analyze` `P/ops_import.py:291`; `api.auto` `P/api.py:210` | `aligners.auto` `C/auto.rs:88`; `TD:25` | PARTIAL | The bite before the final position is done (2026-11-14). With two arches not related, the bite runs between diagnosis and setup, with the plugin's warning (`P/case_auto.py:424-434`). The classifications step is done (2026-11-14): after the staging and before the calendar, as the plugin (`C/auto.rs`, `C/review.rs`). Still missing: no `start` step; all or nothing (the plugin keeps the finished phases on Esc) | `dc-cli/tests/aligners_pipeline.rs`; `C/auto.rs` tests (plugin order, bite before the setup, classification before the calendar) |
 | 1.8 | `oa.align_world` (world frame) `P/ops_view_anim.py:34`, `worldframe.py` | `aligners.frame` `C/frame.rs:15`; `A/frame.rs` | DONE | — | `T/foundations_oracle.rs`; `T/autoseed_real.rs` (frame within 0.05 mm / 0.05°) |
 
 ## 2. Find the teeth (numbering)
@@ -139,15 +139,15 @@ Gaps of 7.1:
 
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
-| 9.1 | `oa.classify` `P/ops_review.py:13` (`review.py`, `classify.py`): complexity, staging pattern, suitability, movement risk and attachment per tooth, segmentation, tooth type | — (algorithm parts in `A/diagnosis/classify.rs`: `movement_flags` `:153`, `attachment_rule` `:274`, `complexity_math` `:295`, `choose_pattern` `:328`, not used by `dca-module`) | MISSING | Records model, command, leaf and inspector | unit tests of `classify.rs` only |
-| 9.2 | `oa.review_decide`, `oa.review_set_value`, `oa.review_bulk`; `OA_ClassRecord` `P/props.py:227`; filter `P/props.py:689` | — | MISSING | Decisions (confirm, value, reset, confirm all without notes) | — |
+| 9.1 | `oa.classify` `P/ops_review.py:13` (`review.py`, `classify.py`): complexity, staging pattern, suitability, movement risk and attachment per tooth, segmentation, tooth type | `aligners.review.classify` `C/review.rs`; records `dca-model/src/review.rs` (`AlignersState::review`, cleared with the arch under `review`); rules `A/review.rs` (using `A/diagnosis/classify.rs`); leaf "Clinical review" in Planning (`TD`, ninth workflow step, `M/done.rs`); inspector `W/review.rs` (counts, Run, filter, list, chosen item); the review's staging pattern re-stages the arch (`C/staging.rs:complexity_of`) | DONE | Without the AI classifier (9.3). Deviations: values are stored as English ids and worded through Fluent / the report text table; decision times are stored as Unix seconds and shown in UTC; the aligner count of a tooth's risk details is left out when there are no aligners yet; no literature sources in the inspector (the report lists them) | `T/review_oracle.rs`: 6 demo cases, 59 records each, kind, tooth, computed value, proposal, options and note in order, equal to the plugin (`golden/fixtures/*/classify/classify.json`, stage `classify` of `golden/oracle/stages.py`); unit tests of `A/review.rs`, `C/review.rs`, `W/review.rs` |
+| 9.2 | `oa.review_decide`, `oa.review_set_value`, `oa.review_bulk`; `OA_ClassRecord` `P/props.py:227`; filter `P/props.py:689` | `aligners.review.decide` (confirm, computed, reset), `aligners.review.set-value` (one of the item's options), `aligners.review.bulk` (`confirm_unflagged`, `reset`) `C/review.rs`; filter (all, to review, with a note, selected tooth), decisions and the two bulk buttons in the inspector `W/review.rs` | DONE | The bulk actions have no confirmation dialog (undo is available). Each command is one undo step; saved and reloaded with the project | `T/review_oracle.rs` (bulk confirmation: 59 of 59 on the 6 demo cases, none with a "check the numbering" note; that path is a unit test); `dc-workspace/tests/save.rs` (round trip); `W/review.rs` tests |
 | 9.3 | AI classifier (`jev.py`), `oa.ai_test`, `oa.open_prefs`, `oa.ai_guide` `P/ops_misc.py:248,268,283` | — | MISSING (by decision) | PORT-PLAN: "Not ported: jev" | — |
 
 ## 10. Attachments
 
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
-| 10.1 | Attachment indication per tooth (review kind `attachment`, `classify.attachment_rule` `P/classify.py:108`); "bond the attachments" in the calendar `P/schedule.py:98-99` | `A/diagnosis/classify.rs:274` (unused); schedule `attachments` parameter `C/schedule.rs:48`; the export passes an empty map (`C/export.rs:387-388`) | PARTIAL | Wire it through the review (9.1); feed the calendar and the report | unit |
+| 10.1 | Attachment indication per tooth (review kind `attachment`, `classify.attachment_rule` `P/classify.py:108`); "bond the attachments" in the calendar `P/schedule.py:98-99` | The attachments in force of the review feed `aligners.planning.schedule` (`C/schedule.rs`), the Aligners inspector calendar, the STL export `.ics` and the export package (`C/export.rs:attachments`), and the report's review table (`A/export/text.rs`, en/it) | DONE | Attachment geometry is 10.2 | `T/review_oracle.rs` (calendar to-do rows of every aligner, before and after attachment decisions; the plugin proposes attachments only on upper_mild, 22 teeth, and upper_severe, 23, and the port gives the same "apply the attachments" event before aligner 1); unit tests |
 | 10.2 | Attachment geometry (not in the plugin either; ANO-001 open) | layer "attachments" `W/view.rs:1063` → "not available" | STUB | Data model decision pending | — |
 
 ## 11. IPR
@@ -156,7 +156,7 @@ Gaps of 7.1:
 |---|---|---|---|---|---|
 | 11.1 | IPR planned by the setup and timed by the staging | `Setup::ipr`, `Stage::ipr` (`dca-model/src/state.rs:152,176`); `IprPlan` in staging | DONE | — | `T/setup_oracle.rs`, `T/staging_oracle.rs` (IPR timing equal) |
 | 11.2 | IPR in the calendar and the report | `A/schedule.rs:330` ("IPR a\|b mm"), report tables | DONE | — | `T/staging_oracle.rs` (calendar) |
-| 11.3 | IPR shown in the view and the totals on the final-position page | layer "IPR" `W/view.rs:1064` → "not available" | STUB | Marks at the contacts, totals in the inspector | — |
+| 11.3 | IPR shown in the view and the totals on the final-position page | Layer "IPR" toggles marks with the amount at each planned contact, following the teeth at the stage shown (`W/labels.rs` `ipr_marks`, `paint_ipr`; `W/view.rs` `toggle_ipr_layer`); with no IPR planned a notice; the totals per arch are in the Final position result lines | DONE | — | `W/labels.rs` and `W/view.rs` tests (marks at the facing contacts, the layer needs a planned IPR) |
 
 ## 12. Shell, trim and aligner models (Production sections 2-5)
 
@@ -252,7 +252,7 @@ Gaps of 7.1:
 
    Large.
 6. **Staging and aligners**: done on 2026-11-14 (`feat/staging-tools`): the sign fix in `q_from_pose` and its siblings; parameters and calendar policy in the inspector; a staging settings command; slowing a tooth (8.3); the result line.
-7. **Clinical review and attachment indication**: records, decisions, bulk, the attachment rule wired into the calendar and the report (9.1, 9.2, 10.1); IPR marks (11.3). Medium.
+7. **Clinical review and attachment indication**: done on 2026-11-14 (`feat/review`): records, decisions, bulk, the attachment rule wired into the calendar and the report (9.1, 9.2, 10.1); IPR marks (11.3). Oracle: 6 demo cases, 59 records each, equal to the plugin.
 8. **Shell, trim and aligner design**:
    - contact bridges and the missing trim pieces;
    - the standard-quality holes and speed (`wip/standard-export`); the model stamps (`fix/model-stamps`);
