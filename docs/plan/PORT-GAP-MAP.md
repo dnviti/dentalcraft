@@ -25,9 +25,9 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 39 |
+| DONE | 40 |
 | PARTIAL | 32 |
-| MISSING | 17 (2 by decision: AI classifier, live test) |
+| MISSING | 16 (2 by decision: AI classifier, live test) |
 | STUB | 4 |
 | N/A | 5 |
 
@@ -91,7 +91,7 @@ Cross-cutting known defects:
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
 | 5.1 | `oa.analyze` `P/ops_plan.py:10` (`case_plan.analyze`: space, crowding, Little, CAT-CAT, level) | `aligners.diagnosis.space-analysis` `C/diagnosis.rs:38`, `…little-index` `:45`, `…bolton` `:52`, `…complexity` `:59`; `A/diagnosis.rs`; FN CASE_ANALYSIS results `TD:66` | DONE | Bolton is not oracle-tested (the demo cases have one arch) | `T/diagnosis_oracle.rs` (6 demo cases) |
-| 5.2 | `oa.diagnosis_edit` (clinician's own values; complexity follows them) `P/ops_manual.py:883` | — (`C/diagnosis.rs:312` asserts that `aligners.diagnosis.edit-values` is absent) | MISSING | Command, model field and inspector controls | — |
+| 5.2 | `oa.diagnosis_edit` (clinician's own values; complexity follows them) `P/ops_manual.py:883`, `manual.diagnosis_override` `P/manual.py:1414` | `aligners.diagnosis.edit-values` `C/diagnosis.rs` (params `arch`, `values`: `discrepancy` −30..30, `little` 0..40, `midline_offset` −10..10, `largest_space` 0..20 mm, a number or `null` to reset; out of range or unknown refuses everything); model `ArchEdits`, `Diagnosis::edits` (optional, no format bump) `dca-model/src/state.rs`; recompute `A/diagnosis/edit.rs`; staging and visits read the values in force; report marks hand values `A/export/report.rs`; FN CASE_ANALYSIS "Manual corrections" `W/leaf.rs` (`case_analysis_corrections`), `W/function.rs` | DONE | Same as the plugin: the items are worked out again from the values in force (rotations rounded to 0.1°), a value equal to the computed one is not by hand, a new analysis of the arch drops the hand values (`hand_values_reset`, toast). Deviations: hand values live apart from the computed ones (the plugin overwrites the analysis and keeps `automatico`); the aligners already planned are kept and reported `staging_outdated` (as 7.3; the plugin clears them); the report marks hand values with `*` (the plugin's `report.py` shows them unmarked) | `T/diagnosis_oracle.rs` `hand_values_give_the_plugins_complexity_on_the_demo_cases` (plugin `diagnosis_override` run by `golden/oracle.py`, 6 cases × 7 steps); `C/diagnosis.rs`, `A/diagnosis/edit.rs`, `dca-model` unit tests; `W/tests/workspace.rs`, `save.rs` plan |
 | 5.3 | Per-tooth crown type and plausibility (`classify.segmentation_plausible`, `tooth_type`) | `classification` block of `C/diagnosis.rs:139-160`; `A/diagnosis/classify.rs:89` | DONE | Not shown in the UI | unit |
 
 ## 6. Bite and occlusion
