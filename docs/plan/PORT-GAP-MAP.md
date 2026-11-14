@@ -25,9 +25,9 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 49 |
-| PARTIAL | 26 |
-| MISSING | 14 (2 by decision: AI classifier, live test) |
+| DONE | 51 |
+| PARTIAL | 25 |
+| MISSING | 13 (2 by decision: AI classifier, live test) |
 | STUB | 3 |
 | N/A | 5 |
 
@@ -130,9 +130,9 @@ Gaps of 7.1:
 
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
-| 8.1 | `oa.staging` `P/ops_plan.py:57`; `perio`, `pattern`, `step_*`, `max_crown_step`, `collision*`, `overcorrection` `P/props.py:470-498` | `aligners.planning.staging.automatic` `C/staging.rs:43`; leaf `aligners.planning.aligners` `C/wrappers.rs:71` (staging + calendar) `TD:91`; `A/staging.rs`; `StagingSettings` in `dca-model/src/settings.rs` | PARTIAL | The 719-stage anomaly at `A/staging.rs:540-541`; no parameters in the inspector and no settings command (the stored `StagingSettings` cannot be changed); no result line (aligners, days, pattern, slowed teeth, collisions left) | `T/staging_oracle.rs` (6 demo cases: poses, phases, IPR timing) |
-| 8.2 | Calendar: `start_date`, `interval_policy` FIXED/ADAPTIVE, `interval_days` `P/props.py:499,726-732`; `schedule.py`; `api.calendar` `P/api.py:391` | `aligners.planning.schedule` `C/schedule.rs:26` (start, interval, policy, attachments); `A/schedule.rs` | DONE | The leaf passes only `start_date` and `interval_days`, not the policy (`C/wrappers.rs:181-188`); none of them in the UI | `T/staging_oracle.rs::the_calendar_matches_the_plugin` |
-| 8.3 | `oa.tooth_speed` (slow one tooth) `P/ops_manual.py:978` | — (`ToothMove.speed` `A/staging.rs:281` is set only from a visit, `C/visits.rs:754`) | MISSING | Command and stored per-tooth speed | — |
+| 8.1 | `oa.staging` `P/ops_plan.py:57`; `perio`, `pattern`, `step_*`, `max_crown_step`, `collision*`, `overcorrection` `P/props.py:470-498`; page `P/ui_phases.py:726` | `aligners.planning.staging.automatic` `C/staging.rs:67`; settings `aligners.settings.staging` `C/staging.rs:74,470` (plugin ranges, `StagingSettings::NUMBERS` `dca-model/src/settings.rs:105`); leaf `aligners.planning.aligners` `C/wrappers.rs:71` (staging + calendar) `TD:91`; `A/staging.rs`; result per arch `AlignersState::staging_results` (`StagingSummary` `dca-model/src/state.rs:320`, stored `C/staging.rs:418`); FN ALIGNERS (result, parameters, Slow a tooth) `W/function.rs:139`, `W/staging.rs:181,311` | DONE | — (the 719-stage anomaly was fixed on 2026-11-14, see HANDOFF.md) | `T/staging_oracle.rs` (6 demo cases: default plan; `non_default_settings_and_a_slowed_tooth_match_the_plugin` `:439`: every parameter off its default, the four explicit patterns, one slowed tooth; poses within 8.3e-7 mm / 2.9e-5°, stage counts, phases, IPR timing and stats equal); `C/staging.rs` tests; `W/staging.rs` tests; `W/tests/workspace.rs` (inspector) |
+| 8.2 | Calendar: `start_date`, `interval_policy` FIXED/ADAPTIVE, `interval_days` `P/props.py:499,726-732`; `schedule.py`; `api.calendar` `P/api.py:391` | `aligners.planning.schedule` `C/schedule.rs:26` (start, interval, policy, attachments; what is not given comes from the case settings `Settings::start_date`, `interval_days`, `interval_policy`); the leaf passes `policy` too (`C/wrappers.rs:190`); export and report take the case settings (`C/export.rs:268`); `A/schedule.rs`; inspector "Calendar" `W/staging.rs:311`, days and dates in the result line `W/staging.rs:145` | DONE | The days of the result line come from the settings in force, the plugin's from `plan["interval_days"]` of the last staging | `T/staging_oracle.rs::the_calendar_matches_the_plugin`; FIXED and ADAPTIVE calendars of every non-default plan (`assert_calendar_matches` `:526`) |
+| 8.3 | `oa.tooth_speed` (slow one tooth) `P/ops_manual.py:978`, `manual.set_tooth_speed` `P/manual.py:1453` | `aligners.planning.tooth-speed` `C/staging.rs:557` (0.2-1, rounded to 0.01, null or 1 = normal; the arch staged again in the same undo step when it has a final position); stored `AlignersState::tooth_speed` (`dca-model/src/state.rs:383`), read by the staging `C/staging.rs:377`; "Slow a tooth" on the selected tooth `W/staging.rs:419` | DONE | The plugin stages the arch again even without a final position; the port then only stores the speed. A re-plan at a visit uses the visit's own speeds (`C/visits.rs:754`), not these | `T/staging_oracle.rs:439` (one slowed tooth, every pattern); `C/staging.rs` tests (more aligners, reset, ranges) |
 | 8.4 | Player: `oa.stage_step`, `oa.play`, stage slider `P/ops_view_anim.py:85,105`, `P/ui_common.py:260-272` | `W/timeline.rs:143` (step, play at 0.6 s per stage, Home/End, slider), stage-0 ghost `overlay0` | DONE | See 17.6 and 17.7 for interpolation and the clock | `W/timeline.rs` tests, `W/view.rs:2218` |
 
 ## 9. Clinical review (classifications)
@@ -251,7 +251,7 @@ Gaps of 7.1:
    - showing and editing the arch line (7.5); the −/+ steps and the movement flags (7.3); the target ghost (7.6).
 
    Large.
-6. **Staging and aligners**: the sign fix in `q_from_pose` and its siblings; parameters and calendar policy in the inspector; a staging settings command; slowing a tooth (8.3); the result line. Medium.
+6. **Staging and aligners**: done on 2026-11-14 (`feat/staging-tools`): the sign fix in `q_from_pose` and its siblings; parameters and calendar policy in the inspector; a staging settings command; slowing a tooth (8.3); the result line.
 7. **Clinical review and attachment indication**: records, decisions, bulk, the attachment rule wired into the calendar and the report (9.1, 9.2, 10.1); IPR marks (11.3). Medium.
 8. **Shell, trim and aligner design**:
    - contact bridges and the missing trim pieces;

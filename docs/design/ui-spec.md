@@ -137,7 +137,7 @@ A leaf shows a check mark when the case holds its result: after a fresh run and 
 | Plan (`aligners.planning`) | | Plan | Piano | 3 steps | |
 | | `aligners.occlusion.align` | Bite | Morso | step | |
 | | `aligners.planning.setup.automatic` | Final position | Posizione finale | step | Move a tooth (`aligners.planning.movements`) |
-| | `aligners.planning.aligners` (key S) | Aligners | Allineatori | step | |
+| | `aligners.planning.aligners` (key S) | Aligners | Allineatori | step | Slow a tooth (`aligners.planning.tooth-speed`) |
 | Production (`aligners.production`) | | Production | Produzione | none | |
 | | `aligners.output.export-all` (asks for a folder) | Export for printing | Esporta per la stampa | no | |
 | | `aligners.output.study-models` | Study models | Modelli da studio | no | |
@@ -305,6 +305,15 @@ The inspector follows the plugin's page (`page_finale`), in the order of the men
 - CLI and MCP: `aligners.planning.setup.line` with `arch`, `points` (case coordinates; none = back to the automatic line) and `recompute` (default true).
 
 **Final ghost** (layer "Target position" of the toolbar, the plugin's `ghost_final`): a toggle. On, at any stage of the timeline, the teeth are ghosted at their final position in `model/target` at 25 % opacity, not pickable: the 3D teeth shown, or the crowns of a scan (its gingiva left out). Each tooth is moved exactly as a stage moves it: its final pose relative to its rest frame, about its centre of resistance. A case without a final position keeps the layer off with the notice "There is no final position yet: compute it to see where the teeth end up." A hidden arch hides its ghost.
+
+### Aligners: parameters, calendar, result, slow a tooth (gap map 8.1, 8.2, 8.3)
+
+The inspector of **Aligners** (`aligners.planning.aligners`) follows the plugin's page (`page_allineatori`), in the order of the menu law:
+
+- **Under the status**: the result of the last aligners of each arch, named when both have one: "n aligners"; "x days (about y months)" and "From dd/mm/yyyy to dd/mm/yyyy (worn 22 hours a day)" from the calendar of the stored aligners with the calendar settings of the case (no start date: today); "Pattern: …; complexity: …" (the pattern used, the automatic one resolved); "Slowed teeth: 31 (0.50), …"; "Collisions left: n (see the report)" as a warning badge; "Overcorrection applied to the final movement". It is kept in the case (`AlignersState::staging_results`) and goes with the aligners of its arch (reset of the final position, new tooth colours, a re-plan at a visit).
+- **Parameters** (`aligners.settings.staging`, one undo step per change, a slider when it is let go, the date when its field is left; nothing is computed): Periodontium (healthy, stage I, II, III), Pattern (automatic, simultaneous proportional, simultaneous X, sequential distalisation 1/2, structured); "Calendar": Aligner change (fixed interval / adaptive 7/14 days), Days per aligner (5 to 21, fixed only; the adaptive choice shows what decides 7 or 14 days), Start of treatment (`YYYY-MM-DD`, empty = the day the calendar is made; a date that is not one is refused); then the folded group "Largest movement per aligner": translation, vertical, rotation, rotation of canines and premolars, torque and tip, largest move of the crown, avoid collisions, contact tolerated, overcorrection. Plugin defaults and slider ranges; then "After changing the parameters, run the aligners again." The run button runs the aligners and their calendar with these settings.
+- **Manual corrections**: **Slow a tooth** ("Rallenta un dente", the plugin's `oa.tooth_speed`) on the tooth selected in the view (component selection): without a tooth "Select a tooth in the view to slow it down."; with one, its speed now ("Normal speed" or "Slowed: speed 0.50"), the slider Speed (0.2 to 1, default 0.5 as the plugin's dialog), **Slow the tooth** (`aligners.planning.tooth-speed`, rounded to two decimals; the aligners of its arch are computed again in the same undo step when the arch has a final position) and, for a slowed tooth, **Back to the normal speed**; then the list of the slowed teeth. Selecting the function or the tooth runs nothing.
+- CLI and MCP: `aligners.settings.staging` (the fields of the parameters and `interval_policy`, `interval_days`, `start_date`), `aligners.planning.tooth-speed` (`fdi`, `speed`; null or 1 = normal), `aligners.planning.aligners` (`start_date`, `interval_days`, `policy` override the case settings for that run). The schedule and the exports use the case's start date, days and policy when they are not given.
 
 ## 7. Accessibility
 
