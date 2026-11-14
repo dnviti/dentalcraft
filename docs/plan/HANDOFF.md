@@ -137,13 +137,73 @@ Known open points of this feature:
 - The gingiva deformation is tested only on synthetic data (the demo case has no stages).
 - The scan-b oracle divergence on teeth 24 and 26 (rounding, see "Current feature" above; within the 0.1 mm bound).
 
-## Known issue for planning: 719-stage anomaly
+## Fixed (2026-11-14): teeth turned the long way round in the setup and the staging ("719-stage anomaly")
 
-Root cause: a quaternion with `w < 0` comes out of the setup pose composition (`dca-module/src/commands/setup.rs:166-167` and `:264-266`), and glam's `to_scaled_axis` is used without a sign flip in `dca-algo/src/staging.rs:541` (`q_from_pose`). The rotation vector then takes the long way round, and staging counts hundreds of stages.
+Branch `feat/setup-alignment` of `dentalcraft-aligners` and `dentalcraft-app` (working trees, not committed). User report: the alignment spun the teeth 360 degrees.
 
-Same pattern, to check when fixing: `frame::matrix_to_rotvec`, `setup.rs:272`, `dca-module/src/commands/visits.rs:740` and `:753`, `dca-algo/src/export.rs:398`.
+- **Root cause.** A rotation has two quaternions, q and −q.
+  - The setup command composed the stored pose from quaternions of matrices (`Pose::from_mat4` of the arch frame and of its inverse), so the sign came out arbitrary: all 12 setup poses of the user's project had w ≈ −1.
+  - glam reads a quaternion with w < 0 the long way round (`to_axis_angle`, `to_scaled_axis`: an angle in (π, 2π)), and the staging read the stored pose that way (`staging::q_from_pose`). A 4° turn became a 356° rotation vector, divided into aligners at 2° each: 713 upper / 705 lower aligners on the user's project, every moved tooth turning up to 180° and back.
+  - The same reading was in `frame::matrix_to_rotvec` (glam gives w < 0 for some rotations beyond 90°), in the `rotation_deg` of the setup and adjust reports (350–360°), in visits and in the export table.
+- **Fix: one helper, `dca_algo::rotation`.** Canonical quaternion w ≥ 0, every angle in [0, π], the plugin's axis at exactly 180°.
+  - Functions: `to_rotvec`, `from_rotvec`, `matrix_to_rotvec`, `rotvec_to_matrix`, `angle`, `degrees`, `canonical_pose`, `pose_from_mat4`.
+  - Every conversion uses it:
+    - staging: `q_from_pose`, `pose_from_q`, `local_pose`, `q_from_delta`;
+    - setup: it stores `staging::pose_from_q(q_from_delta(F, D))`, the plugin's own conversion;
+    - visits: the deviation and the achieved pose;
+    - export, through `q_from_pose`;
+    - adjust and the gizmo command: the poses they store and their reports;
+    - occlusion and ramps: matrix to pose.
+  - Removed: `frame::rotvec_to_matrix`, `frame::matrix_to_rotvec`, `frame::rotation_degrees`, `occlusion::pose_of`, `ramps::pose_of`.
+  - A pose stored with w < 0 (projects saved before the fix) is now read the short way.
+- **Same convention everywhere** (the rest pose has its origin at the centre of resistance). Two places still turned a tooth about its frame origin, and both now use `teeth::rest_pose`:
+  - the ramps at a stage (`dca-module/src/commands/ramps.rs` `stage_deltas`);
+  - the pose carried over when a tooth is rebuilt (`teeth_build.rs` `carried_pose`; the plugin's `T0 R0⁻¹ F`).
+  - App: when the line of sight runs along the plane of the gizmo ring, the ring kept the angle of the turn but lost its sign (`dc-viewport/src/transform.rs`). It now keeps the last turn.
+- **Tests.**
+  - `rotation.rs` unit tests: w < 0; turns next to 180°; the plugin's rotation vector on 400 matrices, of which more than 10 get w < 0 from glam.
+  - `staging.rs`: `a_stored_pose_with_negative_w_is_staged_the_short_way`, `a_turn_next_to_180_degrees_is_staged_the_short_way`.
+  - `staging_oracle.rs`: `stored_target_poses_of_either_quaternion_sign_give_the_plugins_aligners`. On the six demo cases, the stored poses of either sign give the plugin's aligner counts and poses.
+  - dca-module: `the_setup_and_its_aligners_do_not_depend_on_where_the_arch_lies`, `setup_poses_saved_with_negative_w_are_staged_the_short_way`, `a_gizmo_turn_sent_with_negative_w_is_stored_and_reported_the_short_way`, `carrying_a_pose_keeps_the_move_in_the_world`.
+  - dc-viewport: `a_ring_keeps_its_turn_when_the_pointer_leaves_its_plane`.
+- **Real-scan oracle (new).** `crates/dca-algo/tests/planning_real.rs`, generator `tests/fixtures/gen_planning_real.py`.
+  - Environment variable `DC_PLANNING_REAL_ORACLE`. Run the generator after `gen_segmentation_real.py`, into the same folder. It uses the golden oracle's own stage functions and builds the plugin's closed teeth in a process pool.
+  - Scan d (upper arch of the user's patient), measured 2026-11-14 on plugin 42e6d87:
+    - setup targets within 1e-12 mm / 1.3e-12°, arch line within 7.5e-5 mm;
+    - staging through stored poses with w < 0: 12 aligners (plugin 12), poses within 6.8e-7 mm / 2.7e-5°, largest turn of a tooth per aligner 1.406° (plugin 1.406°);
+    - the port's setup, then stored poses, then the staging: 12 aligners (plugin 12).
+  - Scan c (lower arch of the same patient), same day and plugin:
+    - setup targets within 7e-13 mm / 1.5e-12°, arch line within 7.7e-5 mm, setup `overlap_max` 0.295 mm (plugin 0.295 mm);
+    - staging through stored poses with w < 0: 12 aligners (plugin 12), poses within 6.6e-7 mm / 2.8e-5°, largest turn of a tooth per aligner 1.450° (plugin 1.450°);
+    - the port's setup, then stored poses, then the staging: 12 aligners (plugin 12);
+    - overlaps equal the plugin's for every pair; the largest are 37|38 (2.21 mm at rest and final) and 43|41 (1.69 mm at rest, 1.78 mm final).
+  - Run time: the plugin's segmentation took about 3 min per scan and its closed teeth 190 s (d) and 1204 s (c) with 8 jobs. The port test takes under 1 s per scan in release. Delete the oracle folder after the run (patient data).
+- **Overlaps "up to 2.6 mm": not a setup defect.**
+  - The figure is the staging's "residual overlap in the final setup", measured on the closed crowns, and the crowns already overlap at rest by the same metric.
+  - Scan d: 17|16 0.99 mm and 13|12 1.66 mm at rest. A pair the setup does not move keeps its rest overlap.
+  - On the same inputs the plugin gives the same numbers for every pair, at rest and in the final setup.
+  - In the user's project the largest pairs, 35|36 (3.9 mm) and 36|37 (2.1 mm), are teeth the setup does not move.
+- **Old plans kept their length.** Staging again never dropped the trailing aligners of a longer old plan (`dentalcraft-aligners/crates/dca-module/src/commands/staging.rs` `merge_arch`): on the user's project, the new 12 / 8 aligners stayed padded to 713. It now keeps only up to the end of both series. Test: `staging_again_drops_the_aligners_of_a_longer_old_plan`. `AlignersState::clear_arch` (dca-model) now does the same: when one arch is cleared, the other keeps only its own series, up to its last movement or IPR. The repeats of its last pose that only kept up with the cleared arch go, as in the plugin, where each arch has its own `n_stages`. Test: `the_repeats_of_the_other_arch_go_with_the_longer_series`.
+- **An existing project:** Final position → Run again (stores the poses with w ≥ 0), then Aligners → Run again.
+  - On a copy of the user's project with the release CLI, the setup now reports rotations of 0–10° (before: 350–360°) and the staging plans 12 upper / 8 lower aligners, every stored pose with w ≥ 0.
+  - The largest turn of a tooth per aligner is 1.66° and the largest rotation over all stages 9.96°, the setup's own.
+- **Gap map correction (scope for the next step).** `PORT-GAP-MAP.md` 7.1 (c) said the plugin coordinates the upper arch line with the lower one through the bite. In plugin 42e6d87 that code is dead:
+  - `case_plan.run_setup` sets `coord = None`;
+  - `coordination()` is called only by `_setup_line()`, which nothing calls;
+  - `coord_changed()` returns False.
 
-Measured: flipping the sign gave 12 / 9 aligners (upper / lower) instead of 637 / 498. Separately, setup still leaves overlaps up to 2.6 mm. Not fixed (still open, in planning); it belongs to the setup and staging feature, not to the current one.
+  Still live; ported on 2026-11-14 (decided with Main: port only these):
+  - **The setup refusal** (`case_plan.py:386-389`).
+    - Plugin condition: `opposing_pair(obj)` (both arches have their 3D teeth), then `not arches_related(lower, upper)`. Related means `bite.info(lower)["fonte"]` is set (MORSO, VIRTUALE, SCANSIONI) or `occlusion.in_occlusion`.
+    - Port: `dca_algo::occlusion::bite_needed`. It checks that both arches have a scan with tooth colours (the teeth the setup measures), that `bite_registered` is not set (by the registrations and the virtual bite), and that `in_occlusion` is false on the arch frames.
+    - `aligners.planning.setup.automatic` refuses whichever arch it is asked for, with `aligners-err-setup-bite-first`, and changes nothing.
+    - The Final position inspector shows the notice "Bite first", which points to Bite. The Run button stays; a run gives the error toast. The bite is never run from there (menu law).
+  - **The bite before the setup in `aligners.auto`** (`case_auto.py:424-434`).
+    - The order is now diagnosis, bite, setup, staging, schedule, contact map, export. The bite step runs only when `bite_needed` is true at that point.
+    - The virtual bite adds the plugin's warning ("Arches put in VIRTUAL occlusion before the final position…") to `warnings`.
+    - Difference: with a bite scan in the case, the port registers on it, as the Bite leaf does, instead of estimating. The plugin's auto always estimates.
+    - With `occlusion: false`, two arches that are not related stop the run at the setup.
+    - The other differences in order are not live. The orientation runs right after the numbering (the plugin takes the frame from the seeds; `worldframe.auto_align` only sets the display). The schedule is a step (the plugin builds the calendar on demand). The contact map runs at the end (`occlusion.auto_pair` refreshes the summary there). Classifications are not ported (1.7).
 
 ## Parked branches
 
@@ -176,5 +236,5 @@ Read `CLAUDE.md` for the quality gate and the `Cargo.lock` rule (`git checkout -
 ## Known risks
 
 - Aligners and app build standalone against the pinned core (and aligners) tags. If a change uses unreleased core APIs, release core first and move the pins; resolve `Cargo.lock` outside the superproject so it records the tag sources.
-- The setup and staging stages are not trustworthy yet (719-stage anomaly, overlaps); do not present planning output as production-ready.
+- The setup and staging rotations are fixed (2026-11-14, above). The setup refusal without a bite and the bite before the setup in `aligners.auto` are ported (2026-11-14, above).
 - The standard-quality export is slow and fails the print check (see the day-2 handoff).
