@@ -25,9 +25,9 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 37 |
-| PARTIAL | 33 |
-| MISSING | 18 (2 by decision: AI classifier, live test) |
+| DONE | 39 |
+| PARTIAL | 32 |
+| MISSING | 17 (2 by decision: AI classifier, live test) |
 | STUB | 4 |
 | N/A | 5 |
 
@@ -48,10 +48,10 @@ Cross-cutting known defects:
 |---|---|---|---|---|---|
 | 1.1 | `oa.import_scans` `P/ops_import.py:21`; drop on the view `OA_FH_scan` `:332` | `aligners.case.import-scans` `C/import.rs:43,52`; `TD:19`; IMPORT inspector (roles, scan list) `W/function.rs:76-81`; drop overlay `W/view.rs:1310` | DONE | — | `dca-module/tests/import_real.rs` (4 real scans, within 5 % of the plugin's counts) |
 | 1.2 | Arch recognition (phase ARCATA `P/ui_phases.py:404`, `autoseed.detect_arch`) | `aligners.case.detect-arch` `C/import.rs:46,59`; run by `aligners.auto` and the find step; check on the built crowns `A/arch_check.rs` | DONE | — | `import_real.rs` (detection); unit tests |
-| 1.3 | `oa.arch_set` (choose the arch by hand, renumber, flip the occlusal side) `P/ops_manual.py:827` | core `case.set-role` (`dentalcraft-core/crates/dc-session/src/builtins.rs:33`); role correction in the IMPORT scan list | PARTIAL | A role change clears the arch's results (`C/import.rs:959`) instead of renumbering seeds, colours and teeth; no manual flip of the occlusal side | unit |
+| 1.3 | `oa.arch_set` (choose the arch by hand, renumber, flip the occlusal side) `P/ops_manual.py:827`, `P/manual.py:1344` | `aligners.case.set-arch` `C/set_arch.rs` (params `scan`, `arch`, `flip_occlusal`); renumbering `dca-model/src/state.rs` (`other_arch_fdi`, `renumber_arches`); flip in every arch frame `A/frame.rs` (`Input::occlusal_flipped`, `ArchFrame::turned_over`); IMPORT scan list: role control (upper↔lower runs set-arch, bite keeps core `case.set-role`), "Flip the occlusal side" `W/ui.rs` | DONE | Deviations: one scan per arch, so a scan moved onto a taken arch swaps with it (both renumbered); the world frame and the bite registration are reset on an arch change, as core `case.set-role` does | unit (`C/set_arch.rs`, `dca-model` state tests, `A/frame.rs` flip test), `W` tests (`workspace.rs`, `save.rs` round trip), `dc-cli/tests/aligners_pipeline.rs` |
 | 1.4 | `oa.create_case` (Blender mesh as the case) `P/ops_import.py:79` | — | N/A | No Blender scene | — |
 | 1.5 | `oa.demo` `P/ops_import.py:104` | `aligners.demo` `C/demo.rs:19`; `A/demo.rs` | DONE | CLI/MCP only; not in the menu (the plugin has it under "Altri modi di iniziare") | `T/foundations_oracle.rs` (demo replayed vertex by vertex), `T/autoseed_demo.rs` |
-| 1.6 | `oa.make_base` (close an open scan with a base) `P/ops_seeds_seg.py:115`; `base_height` `P/props.py:385` | — (the shell model has its own `base_height_mm`, `A/shell.rs:157`) | MISSING | No command; the export already closes the models | — |
+| 1.6 | `oa.make_base` (close an open scan with a base) `P/ops_seeds_seg.py:115`, `P/aligner.py:1683`; `base_height` `P/props.py:385` | `aligners.case.make-base` `C/make_base.rs` (params `arch`, `height_mm` 0.5-20, default 3); `A/scan_base.rs`; IMPORT inspector "Open scan: close with a base" (height, a button per arch scan) `W/ui.rs` | DONE | Deviation: the base follows an occlusal side flipped by hand (the plugin's `compute_frame` there forgets it). The flat cap is ear-clipped (Blender: beauty fill), same area | `T/scan_base_oracle.rs` (plugin in Blender, `T/fixtures/gen_make_base.py`: counts, plane, points 1e-4 mm, volume and area 1e-5), unit, `W/tests/save.rs` |
 | 1.7 | `oa.auto_analyze` `P/ops_import.py:291`; `api.auto` `P/api.py:210` | `aligners.auto` `C/auto.rs:88`; `TD:25` | PARTIAL | The bite before the final position is done (2026-11-14). With two arches not related, the bite runs between diagnosis and setup, with the plugin's warning (`P/case_auto.py:424-434`). Still missing: no classifications step; no `start` step; all or nothing (the plugin keeps the finished phases on Esc) | `dc-cli/tests/aligners_pipeline.rs`; `C/auto.rs` tests (plugin order, bite before the setup) |
 | 1.8 | `oa.align_world` (world frame) `P/ops_view_anim.py:34`, `worldframe.py` | `aligners.frame` `C/frame.rs:15`; `A/frame.rs` | DONE | — | `T/foundations_oracle.rs`; `T/autoseed_real.rs` (frame within 0.05 mm / 0.05°) |
 
@@ -236,7 +236,7 @@ Gaps of 7.1:
 ## What to finish next (workflow order)
 
 1. **3D teeth wrap-up**: gates, release build and commit of `feat/teeth-components` (4.4, 7.4). Small. (The tooth region view, 4.3, is done on `feat/tooth-region`.)
-2. **Case leftovers**: flip the occlusal side and renumber on an arch change instead of clearing (1.3); `make_base` (1.6). Small. (The bite before the setup in `aligners.auto`, 1.7, is done.)
+2. **Case leftovers**: done (2026-11-14, `feat/case-leftovers`): `aligners.case.set-arch` renumbers on an arch change and flips the occlusal side (1.3); `aligners.case.make-base` (1.6). (The bite before the setup in `aligners.auto`, 1.7, is done.)
 3. **Diagnosis**: values entered by hand (5.2). Small.
 4. **Bite**:
    - an inspector with the registration report, the bite scan slots and the 3-point picking (6.1, 6.4);
