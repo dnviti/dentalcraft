@@ -25,8 +25,8 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 40 |
-| PARTIAL | 32 |
+| DONE | 43 |
+| PARTIAL | 29 |
 | MISSING | 16 (2 by decision: AI classifier, live test) |
 | STUB | 4 |
 | N/A | 5 |
@@ -98,11 +98,11 @@ Cross-cutting known defects:
 
 | # | Plugin function | Port | Status | Missing pieces / defects | Oracle / tests |
 |---|---|---|---|---|---|
-| 6.1 | Phase MORSO page (bite report, scan slots, register, 3 points, virtual) `P/ui_phases.py:771` | leaf `aligners.occlusion.align` `C/wrappers.rs:41,64` (ICP with a bite scan, else virtual, then the contact map); `TD:79` | PARTIAL | Only a run button in the inspector (`W/function.rs:329`): no report (verdict, RMS, teeth, area, side agreement), no scan slots, no 3-point tool, no correction button | `C/bite.rs` tests |
+| 6.1 | Phase MORSO page (bite report, scan slots, register, 3 points, virtual) `P/ui_phases.py:771` | leaf `aligners.occlusion.align` `C/wrappers.rs:41,64`; report `AlignersState::bite_report` (`dca-model/src/bite_report.rs`); inspector `W/bite.rs` (report, bite scan slots + import button, Three points, correction) | DONE | Plugin date of the report left out (deterministic commands); "origin not registered" comes from `bite_registered`, not from `in_occlusion`. Not checked by eye in the window | `W/bite.rs` tests, `W/tests/workspace.rs` (Bite inspector), `W/tests/save.rs`; report fields (verdict, reasons, RMS, teeth and areas per scan and arch, agreement, interpenetration, contacts, opening, facing) against the plugin in `T/bite_oracle.rs` (6.3) |
 | 6.2 | `oa.import_bite` `P/ops_occlusion.py:86` | import-scans with role `bite` (`C/import.rs:90,177`; `W/import.rs:56`) | DONE | — | `C/import.rs:877` tests |
-| 6.3 | `oa.register_bite` `P/ops_occlusion.py:122` (`bite.py`) | `aligners.occlusion.bite-registration.icp` `C/bite.rs:31`; `A/bite.rs:1260` `register` | PARTIAL | No plugin oracle (tests run only on the synthetic `demo_bite_scan` `A/bite.rs:1456`); no real bite scan in the test data | unit |
-| 6.4 | `oa.bite_points` (3 points per arch) `P/ops_occlusion.py:348` | `…bite-registration.three-points` `C/bite.rs:38` | PARTIAL | CLI only; no picking in the viewport; no oracle | unit |
-| 6.5 | `oa.bite_correct` (lift the upper arch to the first contact) `P/ops_occlusion.py:501` | — (`A/occlusion.rs:917` `first_contact` exists) | MISSING | Command and button | — |
+| 6.3 | `oa.register_bite` `P/ops_occlusion.py:122` (`bite.py`) | `aligners.occlusion.bite-registration.icp` `C/bite.rs`; `A/bite.rs:1260` `register`; report stored | DONE | Matches to the plugin's own stability, not to 1e-6: the plugin moves by up to 5.9e-3 mm / 6.8e-3° when its bite points move by 1e-6 mm (ICP face choice at convex edges; the port's BVH queries are f32). Port vs plugin: two scans upper arch 1.5e-5 mm / 2.6e-5°, bite scans 4e-7 mm; one scan upper arch 1.3e-3 mm / 1.3e-3°; areas within 0.4 mm² (plugin spread 0.5), verdict and reasons equal. No real bite scan in the test data | `T/bite_oracle.rs` from `T/fixtures/gen_bite.py` (Blender: plugin demo arches at 16 points per ring and 1 mm gum, bite scans by the plugin's `tests/bitesim.py`; on the coarse arches of `occlusion.json` the plugin's own search lands 178° off); unit, module tests |
+| 6.4 | `oa.bite_points` (3 points per arch) `P/ops_occlusion.py:348` | `…bite-registration.three-points` `C/bite.rs`; tool Three points `W/bite.rs` (plugin protocol: 3 lower, 3 on the bite, optional 3 upper + 3 on the bite; scan focus, numbered markers, Backspace, Enter/Register) | DONE | Pairing (`kabsch_init`) within 2.6e-13 mm of the plugin's; registration from it (plugin scenario D, 1 mm picking error): upper arch 1.2e-3 mm (lower points only), 3.0e-3 mm / 3.3e-3° (both arches), bite scan 4.3e-4 mm, within the plugin's own spread (see 6.3). Not checked by eye in the window | `T/bite_oracle.rs` (`three_points_lower`, `three_points_both`), `W/bite.rs` flow test, `C/bite.rs` tests |
+| 6.5 | `oa.bite_correct` (lift the upper arch to the first contact) `P/ops_occlusion.py:501` | `aligners.occlusion.bite-correct` `C/bite.rs`; `A/bite.rs` `correct_penetration`; button in the Bite inspector | DONE | From the plugin's registered pose the opening is within 1.9e-6 mm of the plugin's 0.218483 mm (the port's rays are f32); after the port's own registration 9.5e-6 mm, upper arch 2.1e-5 mm; the report after it (interpenetration, contacts, reasons) as the plugin's | `T/bite_oracle.rs` (`correct`), `C/bite.rs` tests, `W/bite.rs` test, `W/tests/save.rs` |
 | 6.6 | `oa.occlusion` (virtual bite) `P/ops_occlusion.py:16` | `aligners.occlusion.virtual-bite` `C/occlusion.rs:32`; `A/occlusion.rs:767` `align` | DONE | — | `T/occlusion_oracle.rs` (height grid, first contact) |
 | 6.7 | `oa.contact_map` `P/ops_occlusion.py:525` | `aligners.occlusion.contact-map` `C/occlusion.rs:39`; contacts layer `W/view.rs:1048-1060`, legend `W/view.rs:1708` | DONE | Computed on the UI thread; drawn on the scans (the plugin shows it at the stage shown) | `T/occlusion_oracle.rs` (contact distances) |
 
