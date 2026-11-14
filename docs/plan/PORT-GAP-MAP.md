@@ -10,7 +10,7 @@ Paths:
 - **T** = `dentalcraft-aligners/crates/dca-algo/tests/`
 - **W** = `dentalcraft-app/crates/dc-workspace/src/`
 - **TD** = `M/tree_data.rs` (menu leaves and tools)
-- **FN** = `W/function.rs:88-133` (`FUNCTIONS`, what each inspector shows)
+- **FN** = `W/function.rs:91-134` (`FUNCTIONS`, what each inspector shows)
 
 Status:
 - **DONE**: ported and reachable as a command (CLI/MCP), tested. That means a plugin oracle where the plugin gives numbers, or unit and UI tests for an interactive tool, which has no numeric oracle.
@@ -25,9 +25,9 @@ Menu law: the inspector of a leaf must show its parameters, its run button and i
 
 | Status | Rows |
 |---|---|
-| DONE | 36 |
+| DONE | 37 |
 | PARTIAL | 33 |
-| MISSING | 19 (2 by decision: AI classifier, live test) |
+| MISSING | 18 (2 by decision: AI classifier, live test) |
 | STUB | 4 |
 | N/A | 5 |
 
@@ -83,7 +83,7 @@ Cross-cutting known defects:
 |---|---|---|---|---|---|
 | 4.1 | `oa.build_teeth` `P/ops_seeds_seg.py:222` | `aligners.teeth.build` `C/wrappers.rs:57` (`C/teeth_build.rs`: `aligners.teeth.frames` `C/teeth.rs:27`, reconstruction `C/reconstruct.rs:33`, gingiva `C/gingiva.rs:24`, diagnosis); `A/teeth.rs`, `A/reconstruct.rs` (+`reconstruct/*`), `A/gingiva.rs`; FN BUILD_TEETH (results, out of date) `TD:53` | DONE | b/24 diverges by 3.4e-2 mm (rounding, within the 0.1 mm bound); gum deformation tested only on synthetic data; 19 s on pair ab | `T/teeth_oracle.rs`, `T/reconstruct_oracle.rs`, `T/gingiva_oracle.rs`, `T/teeth_real.rs` (4/4) |
 | 4.2 | `oa.tooth_rebuild` (one tooth, or the changed teeth) `P/ops_manual.py:759` | `aligners.manual.rebuild-tooth` `C/manual.rs:65` (`vertices`, `resegment`; `M/manual/rebuild.rs:34`); `…reconstruction.rebuild-tooth` `C/reconstruct.rs:40`; Tool::Rebuild; partial rebuild in `teeth.build` | DONE | — | unit; `W/tests/outdated_teeth.rs` |
-| 4.3 | `oa.tooth_highlight` / `_end` (crown region and yellow margin line) `P/ops_manual.py:703,741` | — | MISSING | No view of one tooth's region and margin | — |
+| 4.3 | `oa.tooth_highlight` / `_end` (crown region and yellow margin line) `P/ops_manual.py:703,741`; `manual.highlight`, `margin_line` `P/manual.py:1039,1159` | `aligners.manual.tooth-region` `C/manual.rs:71` (read-only: labelled vertices and faces, region check, margin loops; `M/manual/region.rs`); margin line `A/manual/margin.rs` (`margin_line`, the cut of `reconstruct::crown_patch`, not stored); FN BUILD_TEETH "Show the region" / "End" `W/region.rs` (`region_controls`), dimmed scan colours `W/view.rs` (`SceneInput::region`), margin drawn in front by `W/region.rs` `paint_margin` with the token `model_margin` | DONE | Differences: the region is chosen by the selected tooth (click a tooth or its number), not by "active tooth"; no Edit Mode selection to grow or shrink the region (the brush of Separate does that); the margin is a yellow line drawn in front, not a tube with yellow vertices; the camera is not framed on the tooth (see 17.8); the view is at the initial position; both arches are dimmed, the other arch wholly | unit `A/manual/margin.rs`, `M/manual/tests.rs`, `W/region.rs`, `W/view.rs` `built_teeth_tests`; `W/tests/region.rs`, `W/tests/italian.rs`, `W/tests/save.rs` (round trip) |
 | 4.4 | 3D components: select, outline, gizmo (plugin `oa.tooth_grab` `P/ops_plan.py:128`, no scaling) | `aligners.components.transform` `C/components.rs:37`; `W/select.rs:56`; outline and gizmo in `dc-viewport` | PARTIAL | On `feat/teeth-components`, not committed: gates, release build and manual check not run. The port allows a tooth scale (user requirement); the plugin forbids it | `C/components.rs` tests |
 
 ## 5. Diagnosis
@@ -235,7 +235,7 @@ Gaps of 7.1:
 
 ## What to finish next (workflow order)
 
-1. **3D teeth wrap-up**: gates, release build and commit of `feat/teeth-components` (4.4, 7.4); the tooth region view (4.3). Small.
+1. **3D teeth wrap-up**: gates, release build and commit of `feat/teeth-components` (4.4, 7.4). Small. (The tooth region view, 4.3, is done on `feat/tooth-region`.)
 2. **Case leftovers**: flip the occlusal side and renumber on an arch change instead of clearing (1.3); `make_base` (1.6). Small. (The bite before the setup in `aligners.auto`, 1.7, is done.)
 3. **Diagnosis**: values entered by hand (5.2). Small.
 4. **Bite**:

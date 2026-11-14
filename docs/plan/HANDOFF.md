@@ -14,6 +14,7 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 - Display fix found on the way: the 3D teeth, the posed scans and the tooth numbers turned a tooth about its frame origin, while the setup, staging, export and adjust use `teeth::rest_pose` (centre of resistance); with a rotation the shown tooth was off by (I−R)·cor. Now all use the rest pose (`dca-module/src/scene.rs`, `dc-workspace` `overlay::tooth_move`, `labels::posed_point`).
 - App: `dc-viewport` outline (mask + composite passes, `render.rs`, `outline.wgsl`), hover tint, transform gizmo (`transform.rs`); `dc-workspace/src/select.rs` (picking to components, preview, commit, inspector section, W/E/R, Esc).
 - Not done when this was written: the full gates of both repos, the release build, a screenshot, a manual check in the window. Next: run the gates, `cargo build --release --workspace --bins`, try it on a real case, then commit on the branch.
+- Tooth region view (gap map 4.3, branch `feat/tooth-region` of aligners and app, not committed): `oa.tooth_highlight` is "Show the region" / "End" in the 3D teeth inspector (`dc-workspace/src/region.rs`) over the new read-only command `aligners.manual.tooth-region` (`dca-module/src/manual/region.rs`, margin line `dca-algo/src/manual/margin.rs`, token `model_margin`); spec in `ui-spec.md`, "Show the region". Not checked by eye in the window.
 
 ## Released: alpha tags on `main`
 
