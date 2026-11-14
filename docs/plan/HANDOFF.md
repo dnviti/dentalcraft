@@ -1,4 +1,4 @@
-# Handoff, 2026-11-13
+# Handoff, 2026-11-14
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -6,9 +6,39 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
+## Resume here (2026-11-15)
+
+Branch chain, each pushed to origin and stacked on the previous one, in `dentalcraft-aligners` and `dentalcraft-app`:
+`feat/teeth-components` → `feat/setup-alignment` → `feat/tooth-region` → `feat/case-leftovers` → `feat/diagnosis-edit` → `feat/bite` → `feat/setup-tools` → `feat/staging-tools` → `feat/review` → `feat/production` (tip).
+
+- None of it is merged into `main`, and none is checked by eye in the window. Gates on the tip were green on 2026-11-14 22:05 (full `cargo test` in both repos), and the release build is in `dentalcraft-app/target/release/`.
+- Superproject `main` holds the docs commits locally (not pushed). The submodule gitlinks are not bumped.
+- Gap map: [`PORT-GAP-MAP.md`](PORT-GAP-MAP.md) is the source of truth for what is left.
+
+Next, in order:
+1. The user tries the release build (alignment fix: Final position → Run again, then Aligners → Run again on the existing project; 3D teeth → Run again first if the upper arch still shows the scan).
+2. Production leftovers:
+   - the trim bars over gaps and the weak-join check, which need the bar boxes in the shell model (interface change between shell and trim);
+   - the ceilings of the embrasure fills;
+   - the trim panel notes in the UI and the report;
+   - the export aligner shell without bridges and fills;
+   - the trim speed (about 50 s of the 66 s of a Standard aligner);
+   - the `shell_reach` oracle;
+   - the aligner preview and contact overlays (12.8, 12.11).
+3. Then gap-map items 9 to 13 in order: study models, export and print, visits, steps, display and help.
+4. Merge to `main`: one PR per repo from `feat/production` (it contains the whole chain), local CI, merge, aligners release first, then bump the app pin.
+   - Per the product rule, a release request means every repo together.
+
+Decisions waiting for the user:
+- Leaving a project that has a file saves without asking (current behaviour).
+- `aligners.auto` registers a bite scan when present, while the plugin's auto always uses the virtual bite.
+- The tooth scale of the gizmo: the user asked for it, but the plugin forbids it.
+
+## Work of 2026-11-14 (details)
+
 ## In progress (2026-11-14): selecting 3D components, outline and gizmo
 
-Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (working trees, not committed). Spec: `docs/design/ui-spec.md`, "Selecting a component and the gizmo (viewport)".
+Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (committed and pushed). Spec: `docs/design/ui-spec.md`, "Selecting a component and the gizmo (viewport)".
 
 - Aligners: command `aligners.components.transform` (`dca-module/src/commands/components.rs`): tooth move/turn = its pose in the plan (stage given, or the final position), through `run_adjust` (same data as "Move a tooth"); tooth scale = its closed solid scaled about `dca_model::tooth_centre`, kept as `ComponentEdits::tooth_scales` (valid while the tooth keeps that solid; `move_arch` carries it); gingiva/scan = the whole arch through `occlusion::move_arch` (bite scans alone), total kept per scan id in `ComponentEdits::scan_moves`; scale refused on gingiva and scans; stage 0 refused for a tooth. Model in `dca-model/src/components.rs` (field `AlignersState::components`, defaulted, no schema change).
 - Display fix found on the way: the 3D teeth, the posed scans and the tooth numbers turned a tooth about its frame origin, while the setup, staging, export and adjust use `teeth::rest_pose` (centre of resistance); with a rotation the shown tooth was off by (I−R)·cor. Now all use the rest pose (`dca-module/src/scene.rs`, `dc-workspace` `overlay::tooth_move`, `labels::posed_point`).
@@ -25,6 +55,8 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 - Final position inspector (gap map 7.1 d/e, 7.2, 7.3, same branches, not committed): setup parameters stored in the case (`dca-model` `SetupSettings`, command `aligners.settings.setup`, read by every run through `commands/setup.rs` `run_resolved`), result per arch (`Setup::results`), `aligners.planning.setup.reset`, Move a tooth with − / + steps, lock/unlock, exact values (`exact`) and the movement notes (`dc-workspace/src/setup.rs`, `manual.rs` `adjust_controls`). New oracle `golden/fixtures/*/setup/setup_params.json` (non-default parameters, plugin-equal on 6 demo cases). Plugin 42e6d87 crashes with midline CENTER on every demo case. Not checked by eye in the window.
 - Aligners inspector (gap map 8.1-8.3, branch `feat/staging-tools` of aligners and app, not committed): staging and calendar settings in the case (`StagingSettings` with `overcorrection`, `Settings::interval_policy`, `start_date`; command `aligners.settings.staging`, plugin ranges), read by the staging, the schedule, the Aligners leaf (now also `policy`) and the exports; result per arch `AlignersState::staging_results`; "Slow a tooth" `aligners.planning.tooth-speed` (`AlignersState::tooth_speed`, the arch staged again in the same undo step); inspector `dc-workspace/src/staging.rs`. New oracle `golden/fixtures/*/staging/staging_params.json` (every staging parameter off its default, the four explicit patterns, one slowed tooth, FIXED and ADAPTIVE calendars: plugin-equal on the 6 demo cases). Not checked by eye in the window.
 - Clinical review (gap map 9.1, 9.2, 10.1, 11.3, branch `feat/review` of aligners and app, not committed): records in the case (`dca-model/src/review.rs`, `AlignersState::review`), rules `dca-algo/src/review.rs`, commands `aligners.review.{classify,decide,set-value,bulk}` (`dca-module/src/commands/review.rs`; classify runs in `aligners.auto` between the staging and the calendar), leaf "Clinical review" in Planning (ninth workflow step: the footer reads `done/9`), inspector `dc-workspace/src/review.rs`; the attachments in force feed the calendar, the export and the report; the IPR layer marks each planned contact. Oracle `dca-algo/tests/review_oracle.rs` against `golden/fixtures/*/classify`: 6 demo cases, 59 records each, equal to the plugin (no AI classifier, 9.3). Spec: `docs/design/ui-spec.md`, "Clinical review".
+- Production settings and where the aligner ends (gap map 12.2-12.7, 12.10, branch `feat/production` of aligners and app, not committed): settings in the case (`TrimParams::insertion_axis`, `Settings::{stamp, quality}`; `Quality` moved to `dca-model`, re-exported by `dca_algo::export::provider`), command `aligners.settings.production` (groups trim, shell, stamp, bite, ramps, quality; plugin ranges, one undo step; `dca-module/src/commands/production.rs`); the aligner end per arch and side (`AlignersState::aligner_end`, `dca-model/src/production.rs`; command `aligners.production.aligner-end` set / suggest / clear; the setup keeps the teeth left out at rest and records the end, `setup_end_changed` warns like the plugin; the bite with the aligners worn and the ramps count only the covered teeth; the shell, trim and stamp take `aligner_teeth`); `aligners.output.export-all` takes quality and case code from the case; the Parameters of Export for printing (`dc-workspace/src/production.rs`). Spec in `ui-spec.md`, "Export for printing: where the aligner ends and the production settings". Not ported: the advice from shell defects (no defect record). Not checked by eye in the window.
+- Trim pieces (gap map 12.2, branch `feat/production` of aligners, not committed): `dca-algo/src/trim.rs` tries the plugin's three fills (the second and third also grow the outer side of the wall, `fill_out`). It then plugs the holes left where they are, or opens them to the border by slots of the trim surface and builds the shell again, keeping a round only with fewer holes, no cap lost and at most 5% of the volume taken (`trim/holes.rs`: `_handle_loops`, `_short_loops`, `_cap_loop`, `_plug_holes`, `_window_cuts`, `_open_holes`). EQUATOR: the field refinements (`_gum_cell_max`, `_grid_distance`, `_coarse_inside`) are in `trim/cutter.rs`; the border checks (`labial_cover`, `border_heights`, `border_offsets`, the lists of `_aligner_solid`) in `trim/checks.rs`; the rigid removal (`removal_lock`, `rigid_lock`) in `trim/removal.rs`. `aligners.production.trim-line` reads the insertion axis from the case and the aligner end (`aligner_teeth`), and reports fill, plugs, slots and checks. Plugin oracles: `tests/trim_oracle.rs` (`gen_trim.py`, new sections `refine` and `checks`) and `tests/holes_oracle.rs` (`gen_holes.py`, numpy only, also the removal). Still missing: the bars over gaps and their weak-join check (they need the model of the shell, not only its field), the ceilings of the embrasure fills, the panel notes. Not run: the full gates, the release build, a Standard export with holes (golden stage 1 has none).
 
 ## Released: alpha tags on `main`
 
@@ -218,8 +250,8 @@ Branch `feat/setup-alignment` of `dentalcraft-aligners` and `dentalcraft-app` (w
 
 ## Parked branches
 
-- `dentalcraft-aligners`: `fix/model-stamps` (`03be70d`), `wip/standard-export` (`04e471b`).
 - `feat/port-b0` in core, aligners and app: old port work, local only.
+- No longer parked: `fix/model-stamps` (`03be70d`) and `wip/standard-export` (`04e471b`) are in `feat/production` of `dentalcraft-aligners` (2026-11-14, not committed yet): the model stamps kept, the Standard aligners 1 of the golden arches pass the print check.
 
 ## Open items (still valid from wave 1)
 
