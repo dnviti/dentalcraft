@@ -6,6 +6,15 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
+## In progress (2026-11-14): selecting 3D components, outline and gizmo
+
+Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (working trees, not committed). Spec: `docs/design/ui-spec.md`, "Selecting a component and the gizmo (viewport)".
+
+- Aligners: command `aligners.components.transform` (`dca-module/src/commands/components.rs`): tooth move/turn = its pose in the plan (stage given, or the final position), through `run_adjust` (same data as "Move a tooth"); tooth scale = its closed solid scaled about `dca_model::tooth_centre`, kept as `ComponentEdits::tooth_scales` (valid while the tooth keeps that solid; `move_arch` carries it); gingiva/scan = the whole arch through `occlusion::move_arch` (bite scans alone), total kept per scan id in `ComponentEdits::scan_moves`; scale refused on gingiva and scans; stage 0 refused for a tooth. Model in `dca-model/src/components.rs` (field `AlignersState::components`, defaulted, no schema change).
+- Display fix found on the way: the 3D teeth, the posed scans and the tooth numbers turned a tooth about its frame origin, while the setup, staging, export and adjust use `teeth::rest_pose` (centre of resistance); with a rotation the shown tooth was off by (I−R)·cor. Now all use the rest pose (`dca-module/src/scene.rs`, `dc-workspace` `overlay::tooth_move`, `labels::posed_point`).
+- App: `dc-viewport` outline (mask + composite passes, `render.rs`, `outline.wgsl`), hover tint, transform gizmo (`transform.rs`); `dc-workspace/src/select.rs` (picking to components, preview, commit, inspector section, W/E/R, Esc).
+- Not done when this was written: the full gates of both repos, the release build, a screenshot, a manual check in the window. Next: run the gates, `cargo build --release --workspace --bins`, try it on a real case, then commit on the branch.
+
 ## Released: alpha tags on `main`
 
 | Submodule | Tag | Notes |
