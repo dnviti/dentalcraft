@@ -82,6 +82,13 @@ Building inside the superproject rewrites the submodule `Cargo.lock` with path s
 3. Squash merge with a conventional title (`feat:`, `fix:`, `chore:` ...): release-please reads it.
 4. Merge the release-please PR; it tags `vX.Y.Z` and updates the changelog.
 5. Consumers move to the new tag; then bump the pointers here with a commit `chore(submodule): <repo> a vX.Y.Z` (manual, see README).
+6. **Website with every release (user rule, 2026-11-15, always):**
+   - Every app release also updates `dentalcraft-web`:
+     - the downloads (`build/pin-release.mjs`);
+     - the feature content (`content/site.{en,it}.json`, `site.data.json` statuses), so every function released is described and its status (exists / in progress / planned) is true;
+     - a "What's new" entry for the version.
+   - Then build, PR and merge, `scripts/release-local.sh web-image --ref main`, and the rollout of `dentalcraft-web` on the hosting platform.
+   - A release is not done until the live site at https://dentalcraft.app shows the new version and its functions.
 
 Internal path dependencies must not carry a `version =` requirement (release-please would rewrite them and break the build). Release type: `simple` for Rust repos, `go` for the server; tags have no component prefix.
 
