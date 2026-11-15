@@ -14,6 +14,10 @@ Branch chain, each pushed to origin and stacked on the previous one, in `dentalc
 - None of it is merged into `main`, and none is checked by eye in the window. Gates on the tip were green on 2026-11-14 22:05 (full `cargo test` in both repos), and the release build is in `dentalcraft-app/target/release/`.
 - Superproject `main` holds the docs commits locally (not pushed). The submodule gitlinks are not bumped.
 - Gap map: [`PORT-GAP-MAP.md`](PORT-GAP-MAP.md) is the source of truth for what is left.
+- Scans closed at import (2026-11-15, `feat/aligner-preview` of aligners and app, not committed; gap map 1.6 DONE): open arch scans are closed with a base by `aligners.case.import-scans` (seedless `occlusal_axis`, base labels 0), the scan as read kept as a prefix (`AlignersState::scan_bases`, with `closed_by`: import, hand, tooth marks; `dca-module/src/open_scan.rs`); make-base rebuilds from it. The Import scans inspector ("Base under the scans") shows per arch scan how it is closed and its button ("Close with a base", "Run again"). Checked: round trip with undo/redo in `dc-workspace/tests/save.rs`; real scans in `dca-module/tests/import_real.rs` (the prefix equals the file as the oracles read it, 4/4); `autoseed_real` 4/4 and `segmentation_real` scan d green; CLI import of scan d 0.53 s (2450 border edges, +2450 points, +7344 triangles, watertight, kept by save and reopen). Left: the full gates and the release build of the whole workspace (see DECISIONS.md, 2026-11-15).
+- Installers, site side (2026-11-15, `dentalcraft-web` `feat/installers`, not committed): release keys generated once in `~/.config/dentalcraft-release/` (GPG ed25519 `83B0A31CA19DE14A1648A875C10CE2EB009DE538`, minisign `B155D07CF2A36DB0`; public halves in `dentalcraft-web/keys/`); `/en|it/download/` with Installer or Standalone per OS; the image build makes the signed APT, RPM and Flatpak repositories and `/update/stable.json(.minisig)` from the pinned app release (build secret `gpg` = `DENTALCRAFT_GPG_KEY`); `dentalcraft-app/packaging/update-manifest.py` signs the manifest. Details: `dentalcraft-web/README.md`.
+- Installers, packaging side (2026-11-15, `dentalcraft-app` `feat/installers`, shared working copy `/tmp/dc-installers/dentalcraft-app`, not committed): `packaging/installers.sh` builds the AppImage, deb, signed rpm, Flatpak (runtime 25.08, signed commit), setup.exe (NSIS, per user, silent `/S`) and MSI (wixl, per machine, UpgradeCode `{90BDCF16-C5BE-4030-B024-F81F76394F48}`, never change it) from the two archives, which now also hold `LICENSE.md`, `THIRD-PARTY-NOTICES.md` and `install-kind`. `binaries.yml` gains the `installers` job, the signed `update.json` and `dentalcraft_<V>_SHA256SUMS.txt` (new secrets `DENTALCRAFT_GPG_KEY`, `DENTALCRAFT_MINISIGN_KEY`, not set yet). `scripts/release-local.sh binaries app` replays it and now builds linux in the pinned runner image (glibc 2.39; the host build of alpha.3 needs glibc 2.44); new flags `--src`, `--no-sign`, `--only installers`. Details: `dentalcraft-app/packaging/README.md`, `docs/local-ci.md`.
+- Installers, app side (2026-11-15, same working copy, not committed): new crate `crates/dc-update` (minisign-verified `https://dentalcraft.app/update/stable.json`, release key built in; SemVer check; install kind from `install-kind`, `$APPIMAGE`, `/.flatpak-info`; download checked against size and SHA-256; standalone folder swapped and AppImage replaced when the app closes, setup.exe `/S` / `msiexec /passive` run after it quits, deb/rpm/Flatpak get the package manager command). App: check at startup (setting in the account menu), "Check for updates…" in the account menu and on Support, the update dialog (Update now / Later / Skip this version, progress, Restart now through the save on close). Agents: `app.update.check`, `app.update.apply` (bridge and CLI/MCP), `dentalcraft-cli update [--check]`. Details: `dentalcraft-app/README.md` "Updates".
 
 Next, in order:
 1. The user tries the release build (alignment fix: Final position → Run again, then Aligners → Run again on the existing project; 3D teeth → Run again first if the upper arch still shows the scan).
@@ -24,7 +28,7 @@ Next, in order:
    - the export aligner shell without bridges and fills;
    - the trim speed (about 50 s of the 66 s of a Standard aligner);
    - the `shell_reach` oracle;
-   - the aligner preview and contact overlays (12.8, 12.11).
+   - the contact overlays (12.11). The aligner in the 3D view (12.8) is done on `feat/aligner-preview` (aligners, app; not committed): `aligners.view.aligner` / `-exact`, layer "Aligner" in the new toolbar group "Models in the view" (Study models, Target position, Aligner; the five-icon Layers group did not fit beside the cube at 960 x 640), the Aligners inspector section; oracle `dca-algo/tests/aligner_view_oracle.rs` bit for bit with the plugin's `_bind`/`_deform` (fused multiply-adds as numpy's sgemm); ignored golden test green (preview 5.2 s per arch at stage 2, exact Draft 7.7-8.0 s, the export's STL byte for byte); not done: `preview_auto_bases`, a check by eye.
 3. Then gap-map items 9 to 13 in order: study models, export and print, visits, steps, display and help.
 4. Merge to `main`: one PR per repo from `feat/production` (it contains the whole chain), local CI, merge, aligners release first, then bump the app pin.
    - Per the product rule, a release request means every repo together.
@@ -111,7 +115,7 @@ Next:
 1. Release the app (and every other repo with pending work) when the user asks for a release.
 2. Optional speed-ups not done (estimates): fuse the CG vector passes in `solve.rs:143` (exact, 25–35% of the solve); pass the existing edge list into `fair` instead of rebuilding it (`fair.rs:102`); profile `gingiva::gum_weights` (8.8 + 5.7 s on pair ab, outside the build).
 REDACTED
-4. Release archives still lack `LICENSE.md` and `THIRD-PARTY-NOTICES.md` (needs authorization to touch `binaries.yml`).
+4. Fixed (2026-11-15, with the installers; the `binaries.yml` change was authorized by the user): the release archives bundle `LICENSE.md`, `THIRD-PARTY-NOTICES.md`, the font licences and `install-kind`.
 
 ## Released: "Separa denti e gengiva" (Separate teeth and gum)
 
@@ -152,7 +156,7 @@ Open points closed (2026-11-12):
 
 Known gaps:
 
-- Release archives do not bundle `LICENSE.md` and `THIRD-PARTY-NOTICES.md`: it needs a change in `binaries.yml` and `release-local.sh`; the workflows must stay untouched while Actions are suspended.
+- Fixed 2026-11-15: the release archives bundle `LICENSE.md` and `THIRD-PARTY-NOTICES.md` (installers work in `binaries.yml` and `release-local.sh`, authorized by the user).
 - The MCP server info (core `dc-mcp`) has no copyright line.
 - The app `Cargo.lock` lags the manifest versions (release-please bumps the manifests only).
 
