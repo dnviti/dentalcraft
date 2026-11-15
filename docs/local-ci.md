@@ -104,7 +104,7 @@ REDACTED
 
 ```sh
 scripts/release-local.sh <core|aligners|app|server> [--dry-run]
-scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only linux_x86_64|windows_x86_64]
+scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only linux_x86_64|windows_x86_64|installers] [--src DIR] [--no-sign]
 scripts/release-local.sh image server <tag> [--no-push]
 scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
 ```
@@ -149,33 +149,42 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 
 ### `binaries app` (`dentalcraft-app/.github/workflows/binaries.yml`)
 
-**Source:** the tag is checked out from GitHub, not from the submodule. Each matrix entry has its own checkout and `target/`.
+**Source:** the tag is checked out from GitHub, not from the submodule. Each job has its own checkout (`~/.cache/dentalcraft-ci/app-binaries/<job>/src`) and the build entries their own `target/`.
 
-**Matrix entries:**
-- `linux_x86_64` builds on this host.
-- `windows_x86_64` builds in a throwaway `registry.fedoraproject.org/fedora:45` container (`podman run --rm`):
-  - The container installs the workflow's dnf packages (`gcc make pkgconf-pkg-config mingw64-gcc zip`) plus `git-core openssh-clients`.
-  - It installs rustup with 1.99.1 and `x86_64-pc-windows-gnu`, and writes the `insteadOf` and known_hosts setup to its own global git config and `~/.ssh`.
-  - Your SSH agent socket is mounted into it.
-  - rustup and the cargo registry are kept in `~/.cache/dentalcraft-ci/app-binaries/windows_x86_64/{rustup,cargo-home}`, so a rerun does not download them again.
-  - The Fedora image is removed afterwards if the run pulled it.
-  - The rootless pause process (`catatonit`) is stopped only if it was not running before and no container is left.
+**Build entries** (job `build`): each runs in a throwaway container (`podman run --rm`, as root so that the files in the checkout stay yours), with your SSH agent socket mounted. rustup and the cargo registry are kept in `~/.cache/dentalcraft-ci/app-binaries/<entry>/{rustup,cargo-home}`, so a rerun does not download them again.
+- `linux_x86_64` runs in the runner image itself, `ghcr.io/actions/actions-runner@sha256:759a1d94…` (pinned by digest as in the self-hosted runner; Ubuntu 24.04, glibc 2.39), with the workflow's "Install C toolchain" step (apt). The binaries need glibc 2.39 at most, as on GitHub.
+  - Until 2026-11-15 this entry built on the Fedora 45 host. Those binaries needed glibc 2.44, so they ran only on the newest distributions, and not in the Flatpak runtime or on Debian 13.
+  - A `target/` from such an earlier build is wiped once (marker `target/.dc-ci-image`).
+- `windows_x86_64` runs in `registry.fedoraproject.org/fedora:45`. It installs the workflow's dnf packages (`gcc make pkgconf-pkg-config mingw64-gcc zip`) plus `git-core openssh-clients`, rustup with 1.99.1 and `x86_64-pc-windows-gnu`, and writes the `insteadOf` and known_hosts setup to its own global git config and `~/.ssh`.
 
 **Build and package steps:** the workflow's Build and Package steps are passed through verbatim. They keep:
 - the same `RUSTFLAGS` remaps;
 - `cargo build -p dc-app -p dc-cli --release --target <triple>` without `--locked`;
-- the archive names `dentalcraft_<version>_<name>`;
-- the `LICENSES/` font licences and the README.
+- the archive names `dentalcraft_<version>_<name>`, with one top folder;
+- `README.md`, `LICENSE.md`, `THIRD-PARTY-NOTICES.md`, the `LICENSES/` font licences and `install-kind` (`standalone`) next to the binaries.
 
-**Attach to release:**
-- It requires exactly 2 archives, then writes `SHA256SUMS`.
+**Installers** (job `installers`): `packaging/installers.sh` of the tag builds the AppImage, deb, rpm, Flatpak bundle, setup.exe and MSI from the two archives (formats, tools and layout: `dentalcraft-app/packaging/README.md`).
+- It runs in a throwaway `registry.fedoraproject.org/fedora:45` container with `--privileged`: flatpak-builder sandboxes its build with bubblewrap. The workflow uses `docker run` with the same image, flags and environment.
+- Unlike on the runner, the tool downloads and the Flatpak runtime and SDK (about 4 GB on disk) persist in `~/.cache/dentalcraft-ci/app-binaries/installers/cache`; `scripts/ci-local.sh clean` removes them with the rest.
+- The rpm and the Flatpak commit are signed with the release GPG key. The script exports the key from `~/.config/dentalcraft-release/gpg` (fingerprint `83B0A31C…9DE538`; `DENTALCRAFT_RELEASE_KEYS` overrides the directory) into a 0600 file under the cache. It mounts that file read-only into the container and deletes it afterwards. On the runner the key comes from the `DENTALCRAFT_GPG_KEY` secret.
+- First it checks that `packaging/linux/dentalcraft.list` and `dentalcraft.repo` (installed by the deb and the rpm) are byte-identical to `dentalcraft-web/linux/`.
+
+**Attach to release** (job `release`, on its own checkout of the tag):
+- `packaging/update-manifest.py` writes and signs `update.json` and `update.json.minisig`, with the minisign key `~/.config/dentalcraft-release/minisign.key` standing in for the `DENTALCRAFT_MINISIGN_KEY` secret.
+- It requires the 8 assets (2 archives, 6 installers) plus the manifest, and nothing else. Then it writes `dentalcraft_<version>_SHA256SUMS.txt`.
 - It runs `gh release upload --clobber`.
 - It runs the same `<!-- binaries-note -->` release-notes step.
 
+**Images:** the runner image and the Fedora image are removed at the end if the run pulled them. The rootless pause process (`catatonit`) is stopped only if it was not running before and no container is left.
+
 **Flags:**
-- `--only <name>` builds one entry and stops after packaging.
-- `--no-upload` stops before the upload.
-- `--out DIR` copies the archives to DIR.
+- `--only linux_x86_64|windows_x86_64` builds one entry and stops after packaging.
+- `--only installers` reruns the installers job on the two archives of the last run of the same tag.
+- `--no-upload` stops before the upload. The assets stay in `~/.cache/dentalcraft-ci/app-binaries/dist`.
+- `--out DIR` copies the assets to DIR.
+- Local tests only, both need `--no-upload`:
+  - `--src DIR` builds a local working tree instead of the tag: its HEAD commit plus the uncommitted changes, untracked files included, ignored ones not. It is built outside the superproject, so core and aligners are the pinned tags. Example: `scripts/release-local.sh binaries app v0.2.0-alpha.90 --no-upload --src dentalcraft-app`.
+  - `--no-sign` builds without the release keys: the rpm and the Flatpak bundle are unsigned and there is no `update.json`.
 
 ### `binaries server` (`dentalcraft-server/.github/workflows/binaries.yml`)
 
@@ -193,7 +202,7 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 | Image | Tags | Build arg | Labels |
 |---|---|---|---|
 | `ghcr.io/dnviti-personal-org/dentalcraft-server` | `:<version>`, `:latest` | `VERSION` | `source`, `version`, `revision` (= tag commit) |
-| `ghcr.io/dnviti-personal-org/dentalcraft-web` | `:latest`, `:sha-<7>`, plus `:<version>` for a `v*` ref | none | `version` = version or commit sha |
+| `ghcr.io/dnviti-personal-org/dentalcraft-web` | `:latest`, `:sha-<7>`, plus `:<version>` for a `v*` ref | none; build secret `gpg` | `version` = version or commit sha |
 
 **Login and push:**
 - The script logs in to ghcr.io with `gh auth token`, through a temporary `--authfile` that it deletes afterwards.
@@ -202,7 +211,9 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 
 **Cleanup:** afterwards the built tags are removed, and so are base images that were not present before the run.
 
-`web-image` first downloads the app archives named in `content/site.data.json` with `gh release download`. Your gh token stands in for the `APP_RELEASE_TOKEN` secret.
+`web-image` first downloads every file of the app release pinned in `content/site.data.json` with `gh release download` (the workflow does the same). Your gh token stands in for the `APP_RELEASE_TOKEN` secret.
+
+The image build then signs the Linux repositories (APT metadata, RPM `repomd.xml`, Flatpak OSTree commit and summary) with the build secret `gpg`, the armored secret key of DentalCraft Releases. On the runner it is the web repo secret `DENTALCRAFT_GPG_KEY`. Locally the script uses `$DENTALCRAFT_GPG_KEY` when set, otherwise it exports the key from `~/.config/dentalcraft-release/gpg` (override the directory with `DENTALCRAFT_RELEASE_KEYS`) into a 0600 file under the cache, passes it as `--secret id=gpg,src=...`, and deletes it after the build. Keys, repository layout and the update manifest: `dentalcraft-web/README.md`.
 
 Run it after pushing dentalcraft-web `main` or a `v*` tag:
 - `--ref main` (the default) gives the push-to-main run.
@@ -238,7 +249,7 @@ scripts/actions-status.sh off [--dry-run]   # cancel queued runs, then switch Ac
 - **Container image manifest:** `docker/build-push-action@v7` (buildx) adds a provenance attestation by default, so the image it pushes is an OCI index with an attestation manifest. Podman pushes a single Docker v2 manifest, without the attestation. Tags, labels, build args, `HEALTHCHECK` and the Dockerfile stages are the same; layer digests can differ, because the builder and the base-image pull time differ.
 - **Cache:** `rust-cache` restores `~/.cargo/registry`, `~/.cargo/git` and `target/` keyed by the lockfile; locally they simply persist. Run `scripts/ci-local.sh clean` to start from nothing, like a cache miss.
 - **Concurrency groups:** concurrency groups are replaced by a `flock` per tag or ref, so runs queue rather than run at the same time.
-- **Windows build environment:** the Windows build runs in a Fedora container, not on the Ubuntu-like runner image. The toolchain is mingw-w64 GCC either way, and the target triple, flags and packaging are the same.
+- **Windows build and installers environment:** the Windows build and the installers job run in a Fedora 45 container, not on the runner image (the installers job uses that same container on the runner too). The toolchain is mingw-w64 GCC either way, and the target triple, flags and packaging are the same.
 - **Tag-push runs:** `ci.yml` also triggers on `v*` tags, but tags created by `GITHUB_TOKEN` never trigger it on GitHub. There is nothing to replay.
 
 ## Known flaky test

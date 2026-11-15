@@ -10,9 +10,13 @@
 #       server -> image + binaries. Requires local main == origin/main and a
 #       passing `scripts/ci-local.sh <repo> --ref origin/main` on that commit.
 #   scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only NAME]
+#                                     [--src DIR] [--no-sign]
 #       binaries.yml alone (workflow_dispatch). --no-upload builds and packages
-#       only; --out copies the archives to DIR; --only (app: linux_x86_64 or
-#       windows_x86_64) builds one matrix entry and stops after packaging.
+#       only; --out copies the release assets to DIR; --only (app: linux_x86_64,
+#       windows_x86_64 or installers) runs one job and stops there (installers
+#       reuses the two archives of the last run). app only, local tests (need
+#       --no-upload): --src DIR builds a working tree (its HEAD plus uncommitted
+#       changes) instead of the tag; --no-sign builds without the release keys.
 #   scripts/release-local.sh image server <tag> [--no-push]
 #       dentalcraft-server image.yml alone (workflow_dispatch).
 #   scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
@@ -34,11 +38,20 @@ set -euo pipefail
 # node_modules/release-please "version": "17.6.0". Re-check when v5 moves:
 #   gh api 'repos/googleapis/release-please-action/contents/package-lock.json?ref=v5' --jq .content | base64 -d | jq '.packages["node_modules/release-please"].version'
 RELEASE_PLEASE_VERSION=17.6.0
-# binaries.yml of dentalcraft-app: Windows is cross-compiled with mingw-w64 in a
-# throwaway container of this image.
+# binaries.yml of dentalcraft-app. linux_x86_64 runs in the self-hosted runner image,
+# pinned by digest as in the self-hosted runner (ghcr.io/actions/actions-runner,
+# Ubuntu 24.04, glibc 2.39): binaries built on the host would need its newer glibc.
+LINUX_IMAGE=ghcr.io/actions/actions-runner@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+# Windows is cross-compiled with mingw-w64 in a throwaway container of this image.
 WIN_IMAGE=registry.fedoraproject.org/fedora:45
+# The installers job runs packaging/installers.sh in a throwaway container of this image.
+PKG_IMAGE=registry.fedoraproject.org/fedora:45
+# Release signing keys (dentalcraft-web README, Keys): GPG for the Linux repositories,
+# minisign for the update manifest. They stand in for the DENTALCRAFT_* secrets.
+RELEASE_KEYS=${DENTALCRAFT_RELEASE_KEYS:-$HOME/.config/dentalcraft-release}
+RELEASE_GPG_FPR=83B0A31CA19DE14A1648A875C10CE2EB009DE538
 
-usage() { sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gh_repo() { printf '%s/dentalcraft-%s\n' "$ORG" "$1"; }
 
@@ -130,7 +143,7 @@ cmd_release() {
   [ "$(printf '%s\n' "$created" | wc -l)" -eq 1 ] || die "more than one new release: $created"
   echo "release_created=true tag_name=$created"
   case "$repo" in
-    app) cmd_binaries_app "$created" 0 "" "" ;;
+    app) cmd_binaries_app "$created" 0 "" "" 0 ;;
     server)
       # Two independent jobs on GitHub: one failing does not stop the other.
       # Plain statements, not `||` lists, so that errexit stays on inside each job.
@@ -154,7 +167,32 @@ APP_TAG_CHECK='case "$TAG" in
   *) echo "tag must look like vX.Y.Z, got '"'"'$TAG'"'"'" >&2; exit 1 ;;
 esac'
 
-# "Build" and "Package" of binaries.yml, verbatim (run in the checkout).
+# "Install C toolchain", "Build" and "Package" of binaries.yml, verbatim (run in the checkout).
+APP_C_TOOLCHAIN='SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+need_cc=0; need_mingw=0
+command -v cc >/dev/null || need_cc=1
+if [ "$TARGET" = x86_64-pc-windows-gnu ]; then
+  command -v x86_64-w64-mingw32-gcc >/dev/null && command -v zip >/dev/null || need_mingw=1
+fi
+[ "$need_cc" = 0 ] && [ "$need_mingw" = 0 ] && exit 0
+if command -v apt-get >/dev/null; then
+  pkgs=""
+  [ "$need_cc" = 1 ] && pkgs="$pkgs build-essential pkg-config"
+  [ "$need_mingw" = 1 ] && pkgs="$pkgs gcc-mingw-w64-x86-64 zip"
+  $SUDO apt-get update -qq && $SUDO apt-get install -y --no-install-recommends $pkgs
+elif command -v dnf >/dev/null; then
+  pkgs=""
+  [ "$need_cc" = 1 ] && pkgs="$pkgs gcc make pkgconf-pkg-config"
+  [ "$need_mingw" = 1 ] && pkgs="$pkgs mingw64-gcc zip"
+  $SUDO dnf install -y $pkgs
+elif command -v apk >/dev/null; then
+  pkgs=""
+  [ "$need_cc" = 1 ] && pkgs="$pkgs build-base pkgconf"
+  [ "$need_mingw" = 1 ] && pkgs="$pkgs mingw-w64-gcc zip"
+  $SUDO apk add --no-cache $pkgs
+else
+  echo "no supported package manager to install the toolchain" >&2; exit 1
+fi'
 APP_BUILD='export RUSTFLAGS="--remap-path-prefix=$HOME=/home --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$PWD=/src"
 cargo build -p dc-app -p dc-cli --release --target "$TARGET"'
 APP_PACKAGE='VERSION="${TAG#v}"
@@ -165,7 +203,10 @@ find crates -path '"'"'*/assets/fonts/*'"'"' -type f \( -name '"'"'OFL*'"'"' -o 
   d="$STAGE/LICENSES/$(basename "$(dirname "$f")")"
   mkdir -p "$d" && cp "$f" "$d/"
 done
-cp README.md "$STAGE/"
+# The licence (EULA) and the third-party notices, also built into the programs.
+cp README.md LICENSE.md THIRD-PARTY-NOTICES.md "$STAGE/"
+# How this copy was installed, read by the in-app updater (packaging/README.md).
+echo standalone > "$STAGE/install-kind"
 case "$TARGET" in
   x86_64-pc-windows-gnu)
     cp "target/$TARGET/release/dentalcraft.exe" "target/$TARGET/release/dentalcraft-cli.exe" "$STAGE/"
@@ -178,35 +219,35 @@ case "$TARGET" in
 esac
 ls -l dist'
 
-# linux_x86_64 on this host, like the self-hosted runner.
-app_build_linux() {
-  local tag=$1
-  (
-    set -e
-    checkout_remote app "refs/tags/$tag" app-binaries/linux_x86_64
-    clean_env
-    export CARGO_INCREMENTAL=0 CARGO_TERM_COLOR=always CARGO_NET_GIT_FETCH_WITH_CLI=true
-    export TAG=$tag TARGET=x86_64-unknown-linux-gnu NAME=linux_x86_64
-    export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
-    cd "$SRC"
-    rm -rf dist ./dentalcraft_*
-    c_toolchain_step
-    ssh_env
-    run_step "Install Rust $RUST_TOOLCHAIN ($TARGET)" "rustup toolchain list | grep -q '^$RUST_TOOLCHAIN-' || rustup toolchain install $RUST_TOOLCHAIN --profile minimal --no-self-update
-rustup target add --toolchain $RUST_TOOLCHAIN $TARGET
-rustc --version --verbose"
-    run_step "Build" "$APP_BUILD"
-    run_step "Package" "$APP_PACKAGE"
-  )
+# The sources of an app job: the tag from GitHub (actions/checkout) or, with --src,
+# a local working tree: its HEAD commit plus the uncommitted changes (untracked
+# files included, ignored ones not). Sets SRC.
+APP_SRC=
+app_checkout() {
+  local ref=$1 dir=$2 wt=$APP_SRC
+  if [ -z "$wt" ]; then
+    checkout_remote app "$ref" "$dir"
+    return
+  fi
+  SRC=$CACHE/$dir/src
+  mkdir -p "$SRC"
+  [ -d "$SRC/.git" ] || git init -q "$SRC"
+  git -C "$SRC" fetch -q --force --no-tags "$wt" HEAD
+  git -C "$SRC" checkout -q --force --detach FETCH_HEAD
+  git -C "$SRC" clean -ffdxq -e /target
+  git -C "$wt" ls-files -z --cached --others --exclude-standard \
+    | rsync -a --from0 --files-from=- --ignore-missing-args "$wt/" "$SRC/"
+  git -C "$wt" ls-files -z --deleted | (cd "$SRC" && xargs -0r rm -f --)
+  printf '##[group]Checkout (--src: a local working tree, not the tag)\n  path:   %s\n  commit: %s plus the uncommitted changes\n  into:   %s\n##[endgroup]\n' \
+    "$wt" "$(git -C "$SRC" rev-parse HEAD)" "$SRC"
 }
 
-# The steps run in the container, with the scripts handed over in the environment.
+# The steps of a build job in its container, with the scripts handed over in the environment.
 # shellcheck disable=SC2016
-WIN_DRIVER='set -euo pipefail
+BUILD_DRIVER='set -euo pipefail
 step() { printf "\n##[group]%s\n%s\n##[endgroup]\n" "$1" "$2"; bash --noprofile --norc -eo pipefail -c "$2"; printf -- "--> %s: ok\n" "$1"; }
 step "Check the tag" "$STEP_TAG_CHECK"
-step "Install C toolchain" "dnf install -y -q gcc make pkgconf-pkg-config mingw64-gcc zip git-core openssh-clients >/dev/null
-x86_64-w64-mingw32-gcc --version | head -n 1"
+step "Install C toolchain" "$STEP_C_TOOLCHAIN"
 step "Use SSH for private dentalcraft repositories" "git config --global url.\"git@github.com:$ORG/\".insteadOf \"https://github.com/$ORG/\"
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 echo \"$GITHUB_HOST_KEY\" >> ~/.ssh/known_hosts"
@@ -220,94 +261,229 @@ rustc --version --verbose"
 step "Build" "$STEP_BUILD"
 step "Package" "$STEP_PACKAGE"'
 
-# windows_x86_64: the runner installs mingw64-gcc and zip; here that happens in a
-# throwaway Fedora container (removed with --rm). rustup and the cargo registry
-# live in mounted cache directories so that reruns are incremental.
-app_build_windows() (
+# One build job in a throwaway container (removed with --rm) of an image, as root so
+# that the files written into the checkout stay yours. rustup and the cargo registry
+# live in mounted cache directories, so that reruns are incremental.
+# Args: image matrix-name target install-c-toolchain-step. Needs SRC and TAG.
+app_build_in_container() (
   set -e
-  tag=$1 cache=$CACHE/app-binaries/windows_x86_64 rc=0 pulled=0 cname="dc-ci-win-$$"
-  checkout_remote app "refs/tags/$tag" app-binaries/windows_x86_64
-  rm -rf "$SRC/dist" "$SRC"/dentalcraft_*
+  image=$1 name=$2 target=$3 c_toolchain=$4 cache=$CACHE/app-binaries/$2 cname="dc-ci-$2-$$"
   mkdir -p "$cache/rustup" "$cache/cargo-home"
   [ -n "${SSH_AUTH_SOCK:-}" ] || die "no ssh agent (SSH_AUTH_SOCK): the private dependencies are fetched over SSH"
-  image_existed "$WIN_IMAGE" || pulled=1
-  printf '\n##[group]Container %s (%s), removed on exit\n##[endgroup]\n' "$cname" "$WIN_IMAGE"
-  podman run --rm --name "$cname" \
+  printf '\n##[group]Container %s (%s), removed on exit\n##[endgroup]\n' "$cname" "$image"
+  podman run --rm --name "$cname" --user root \
     --security-opt label=disable \
     -v "$SRC:/work/dentalcraft-app" -w /work/dentalcraft-app \
     -v "$cache/rustup:/opt/rustup" -v "$cache/cargo-home:/opt/cargo" \
     -v "$SSH_AUTH_SOCK:/run/ssh-agent.sock" -e SSH_AUTH_SOCK=/run/ssh-agent.sock \
-    -e RUSTUP_HOME=/opt/rustup -e CARGO_HOME=/opt/cargo \
-    -e PATH=/opt/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin \
+    -e HOME=/root -e RUSTUP_HOME=/opt/rustup -e CARGO_HOME=/opt/cargo \
+    -e PATH=/opt/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -e CARGO_NET_GIT_FETCH_WITH_CLI=true -e CARGO_INCREMENTAL=0 -e CARGO_TERM_COLOR=always \
-    -e TAG="$tag" -e TARGET=x86_64-pc-windows-gnu -e NAME=windows_x86_64 \
+    -e TAG="$TAG" -e TARGET="$target" -e NAME="$name" \
     -e CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
     -e ORG="$ORG" -e GITHUB_HOST_KEY="$GITHUB_HOST_KEY" -e RUST_TOOLCHAIN="$RUST_TOOLCHAIN" \
-    -e STEP_TAG_CHECK="$APP_TAG_CHECK" -e STEP_BUILD="$APP_BUILD" -e STEP_PACKAGE="$APP_PACKAGE" \
-    "$WIN_IMAGE" bash --noprofile --norc -c "$WIN_DRIVER" || rc=$?
-  if [ "$pulled" = 1 ]; then
-    podman rmi -f "$WIN_IMAGE" >/dev/null && echo "removed image $WIN_IMAGE (pulled by this run)"
-  fi
-  podman_stop_pause
-  exit "$rc"
+    -e STEP_TAG_CHECK="$APP_TAG_CHECK" -e STEP_C_TOOLCHAIN="$c_toolchain" \
+    -e STEP_BUILD="$APP_BUILD" -e STEP_PACKAGE="$APP_PACKAGE" \
+    "$image" bash --noprofile --norc -c "$BUILD_DRIVER"
 )
 
-cmd_binaries_app() {
-  local tag=$1 no_upload=$2 out=$3 only=$4 dist=$CACHE/app-binaries/dist failed=0 n
-  printf '\n========== binaries %s %s ==========\n' "$(gh_repo app)" "$tag"
-  TAG=$tag run_step "Check the tag" "TAG='$tag'
-$APP_TAG_CHECK"
-  lock "binaries-app-$tag"
-  podman_note_state
-  case "$only" in ''|linux_x86_64|windows_x86_64) ;; *) die "--only: linux_x86_64 or windows_x86_64" ;; esac
-  rm -rf "$dist"
-  mkdir -p "$dist"
-  # strategy.fail-fast: false - both entries run; the release job needs both.
-  for n in linux_x86_64 windows_x86_64; do
-    [ -z "$only" ] || [ "$only" = "$n" ] || continue
-    printf '\n---------- build %s ----------\n' "$n"
-    set +e
-    if [ "$n" = linux_x86_64 ]; then app_build_linux "$tag"; else app_build_windows "$tag"; fi
-    local rc=$?
-    set -e
-    if [ "$rc" -ne 0 ]; then failed=1; echo "##[error]build $n failed"; continue; fi
-    # actions/upload-artifact + download-artifact (merge-multiple) into one dist/
-    cp "$CACHE/app-binaries/$n/src/dist/"* "$dist/"
+# linux_x86_64: the runner runs the job in its own image; here a container of the
+# same image does, with the workflow's "Install C toolchain" step.
+app_build_linux() (
+  set -e
+  tag=$1
+  app_checkout "refs/tags/$tag" app-binaries/linux_x86_64
+  rm -rf "$SRC/dist" "$SRC"/dentalcraft_*
+  # A target/ built elsewhere (on the host, before 2026-11-15) holds build scripts
+  # linked against another glibc: start it over.
+  if [ "$(cat "$SRC/target/.dc-ci-image" 2>/dev/null)" != "$LINUX_IMAGE" ]; then
+    rm -rf "$SRC/target"
+    mkdir -p "$SRC/target"
+    printf '%s\n' "$LINUX_IMAGE" > "$SRC/target/.dc-ci-image"
+  fi
+  TAG=$tag app_build_in_container "$LINUX_IMAGE" linux_x86_64 x86_64-unknown-linux-gnu "$APP_C_TOOLCHAIN"
+)
+
+# windows_x86_64: the runner installs mingw64-gcc and zip; here that happens in a
+# throwaway Fedora container, which also needs git and ssh.
+WIN_C_TOOLCHAIN='dnf install -y -q gcc make pkgconf-pkg-config mingw64-gcc zip git-core openssh-clients >/dev/null
+x86_64-w64-mingw32-gcc --version | head -n 1'
+app_build_windows() (
+  set -e
+  tag=$1
+  app_checkout "refs/tags/$tag" app-binaries/windows_x86_64
+  rm -rf "$SRC/dist" "$SRC"/dentalcraft_*
+  TAG=$tag app_build_in_container "$WIN_IMAGE" windows_x86_64 x86_64-pc-windows-gnu "$WIN_C_TOOLCHAIN"
+)
+
+# The installers job: packaging/installers.sh builds the AppImage, deb, rpm, Flatpak,
+# setup.exe and MSI from the two archives, in a throwaway Fedora container (docker run
+# on the runner, podman here), --privileged because flatpak-builder sandboxes the
+# build with bubblewrap. The DENTALCRAFT_GPG_KEY secret is the armored secret release
+# key, exported here from $RELEASE_KEYS/gpg; the container reads it from a mounted
+# file. Unlike the runner, the tool downloads and the Flatpak runtime are kept between
+# runs (DC_PKG_CACHE).
+app_installers() (
+  set -e
+  tag=$1 no_sign=$2 dist=$3 version=${1#v} cache=$CACHE/app-binaries/installers cname="dc-ci-installers-$$"
+  app_checkout "refs/tags/$tag" app-binaries/installers
+  # The apt and dnf repository definitions installed by the deb and the rpm must be
+  # byte-identical to the ones the site serves.
+  for f in dentalcraft.list dentalcraft.repo; do
+    cmp "$SRC/packaging/linux/$f" "$ROOT/dentalcraft-web/linux/$f" \
+      || die "packaging/linux/$f differs from dentalcraft-web/linux/$f: they must be identical (packaging/README.md)"
   done
-  [ "$failed" = 0 ] || die "a build failed: nothing is attached"
-  if [ -n "$out" ]; then mkdir -p "$out" && cp "$dist"/* "$out/" && echo "copied to $out"; fi
-  [ -z "$only" ] || { echo "--only $only: stopping after packaging ($dist)"; return 0; }
-  (
-    cd "$dist"
-    run_step "Checksums" 'ls -l
-[ "$(ls | wc -l)" -eq 2 ] || { echo "expected 2 archives (Linux, Windows)" >&2; exit 1; }
-sha256sum -- * > SHA256SUMS
-cat SHA256SUMS'
-  )
-  [ -z "$out" ] || cp "$dist/SHA256SUMS" "$out/"
-  if [ "$no_upload" = 1 ]; then echo "--no-upload: archives in $dist"; return 0; fi
-  (
-    export GH_TOKEN GH_REPO TAG
-    GH_TOKEN=$(gh auth token) GH_REPO=$(gh_repo app) TAG=$tag
-    cd "$CACHE/app-binaries"
-    run_step "Upload to the release" 'gh release view "$TAG" >/dev/null   # the release must already exist
-gh release upload "$TAG" dist/* --clobber'
-    run_step "Release notes" 'marker='"'"'<!-- binaries-note -->'"'"'
+  rm -rf "$SRC/dist" "$SRC/installers"
+  mkdir -p "$SRC/dist" "$cache/cache"
+  # actions/download-artifact, pattern binaries-*
+  cp "$dist/dentalcraft_${version}_linux_x86_64.tar.gz" "$dist/dentalcraft_${version}_windows_x86_64.zip" "$SRC/dist/"
+  keyfile=$(mktemp "$cache/gpg-key.XXXXXX")
+  trap 'rm -f "$keyfile"' EXIT
+  export ALLOW_UNSIGNED='' SOURCE_DATE_EPOCH
+  if [ "$no_sign" = 1 ]; then
+    ALLOW_UNSIGNED=1
+  else
+    [ -d "$RELEASE_KEYS/gpg" ] || die "no release GPG key in $RELEASE_KEYS/gpg: pass --no-sign for an unsigned local test"
+    gpg --homedir "$RELEASE_KEYS/gpg" --batch --armor --export-secret-keys "$RELEASE_GPG_FPR" > "$keyfile"
+    gpgconf --homedir "$RELEASE_KEYS/gpg" --kill gpg-agent 2>/dev/null || true
+    [ -s "$keyfile" ] || die "could not export the release GPG key $RELEASE_GPG_FPR from $RELEASE_KEYS/gpg"
+  fi
+  SOURCE_DATE_EPOCH=$(git -C "$SRC" log -1 --format=%ct)
+  printf '\n##[group]Container %s (%s, --privileged), removed on exit\n##[endgroup]\n' "$cname" "$PKG_IMAGE"
+  podman run --rm --name "$cname" --privileged \
+    -v "$SRC:/work/dentalcraft-app" -w /work/dentalcraft-app \
+    -v "$keyfile:/run/secrets/dentalcraft-gpg-key:ro" -e DENTALCRAFT_GPG_KEY_FILE=/run/secrets/dentalcraft-gpg-key \
+    -v "$cache/cache:/var/cache/dentalcraft-installers" -e DC_PKG_CACHE=/var/cache/dentalcraft-installers \
+    -e TAG="$tag" -e SOURCE_DATE_EPOCH -e ALLOW_UNSIGNED \
+    "$PKG_IMAGE" bash packaging/installers.sh
+)
+
+# "Update manifest", "Checksums" (in dist/) and "Release notes" of the release job, verbatim.
+APP_UPDATE_MANIFEST='VERSION="${TAG#v}"
+python3 packaging/update-manifest.py --version "$VERSION" --assets dist --date "$(date -u -d "@$(git log -1 --format=%ct)" +%F)"'
+APP_CHECKSUMS='VERSION="${TAG#v}"
+assets="dentalcraft_${VERSION}_linux_x86_64.tar.gz dentalcraft_${VERSION}_windows_x86_64.zip DentalCraft-${VERSION}-x86_64.AppImage dentalcraft_${VERSION}_amd64.deb dentalcraft-${VERSION}-1.x86_64.rpm DentalCraft-${VERSION}.flatpak DentalCraft-${VERSION}-setup.exe DentalCraft-${VERSION}-x86_64.msi"
+ls -l
+for f in $assets; do [ -f "$f" ] || { echo "missing release asset $f" >&2; exit 1; }; done
+for f in *; do
+  case " $assets update.json update.json.minisig " in
+    *" $f "*) ;;
+    *) echo "unexpected file among the release assets: $f" >&2; exit 1 ;;
+  esac
+done
+sha256sum -- * > "dentalcraft_${VERSION}_SHA256SUMS.txt"
+cat "dentalcraft_${VERSION}_SHA256SUMS.txt"'
+APP_RELEASE_NOTES='VERSION="${TAG#v}"
+marker='"'"'<!-- binaries-note -->'"'"'
 gh release view "$TAG" --json body --jq .body > notes.md
 if ! grep -qF "$marker" notes.md; then
   {
     echo
     echo "$marker"
-    echo "## Binaries"
+    echo "## Downloads"
     echo
+    echo "- Windows x86_64 installers: \`DentalCraft-${VERSION}-setup.exe\` (for the current user, no administrator rights) or \`DentalCraft-${VERSION}-x86_64.msi\` (for all users)."
+    echo "- Linux x86_64 installers: Flatpak, \`.deb\` (Debian, Ubuntu), \`.rpm\` (Fedora), AppImage."
     # When macOS is re-enabled, append to the line below: "; macOS universal (Apple Silicon and Intel): \`.zip\` with \`DentalCraft.app\`"
-    echo "- Linux x86_64: \`.tar.gz\`; Windows x86_64: \`.zip\` (\`dentalcraft.exe\`)."
-    echo "- Each archive also holds \`dentalcraft-cli\`: the command line and MCP server that drive DentalCraft headless or through a running app."
-    echo "- Verify the downloads against \`SHA256SUMS\`."
-    echo "- **The binaries are not code-signed.** Windows: SmartScreen may warn."
+    echo "- Standalone, without installation: Linux \`.tar.gz\`, Windows \`.zip\` (\`dentalcraft.exe\`)."
+    echo "- Updates: the \`.deb\` and the \`.rpm\` add the DentalCraft apt or dnf repository, the Flatpak updates from the DentalCraft Flatpak repository, the other versions check dentalcraft.app at startup."
+    echo "- Each download also holds \`dentalcraft-cli\`: the command line and MCP server that drive DentalCraft headless or through a running app."
+    echo "- Verify the downloads against \`dentalcraft_${VERSION}_SHA256SUMS.txt\`. The Linux packages and repositories are signed with the DentalCraft release key, https://dentalcraft.app/keys/dentalcraft.gpg."
+    echo "- **The Windows programs are not code-signed.** SmartScreen may warn."
   } >> notes.md
   gh release edit "$TAG" --notes-file notes.md
 fi'
+
+# The images that a run pulls are removed at its end (the runner image is large).
+APP_PULLED=()
+app_cleanup() {
+  local img
+  for img in "${APP_PULLED[@]}"; do
+    podman image exists "$img" || continue
+    podman rmi -f "$img" >/dev/null && echo "removed image $img (pulled by this run)"
+  done
+  APP_PULLED=()
+  podman_stop_pause
+}
+
+cmd_binaries_app() {
+  local tag=$1 no_upload=$2 out=$3 only=$4 no_sign=$5 version=${1#v} dist=$CACHE/app-binaries/dist failed=0 n rc img
+  printf '\n========== binaries %s %s%s ==========\n' "$(gh_repo app)" "$tag" "${APP_SRC:+ (--src $APP_SRC)}"
+  TAG=$tag run_step "Check the tag" "TAG='$tag'
+$APP_TAG_CHECK"
+  case "$only" in ''|linux_x86_64|windows_x86_64|installers) ;; *) die "--only: linux_x86_64, windows_x86_64 or installers" ;; esac
+  if [ "$no_upload" = 0 ] && { [ -n "$APP_SRC" ] || [ "$no_sign" = 1 ]; }; then
+    die "--src and --no-sign are for local tests: add --no-upload"
+  fi
+  lock "binaries-app-$tag"
+  podman_note_state
+  for img in "$LINUX_IMAGE" "$WIN_IMAGE" "$PKG_IMAGE"; do
+    image_existed "$img" && continue
+    case " ${APP_PULLED[*]} " in *" $img "*) ;; *) APP_PULLED+=("$img") ;; esac
+  done
+  trap app_cleanup EXIT
+  if [ "$only" = installers ]; then
+    for n in linux_x86_64.tar.gz windows_x86_64.zip; do
+      [ -f "$dist/dentalcraft_${version}_$n" ] || die "--only installers: no $dist/dentalcraft_${version}_$n, run the build jobs first"
+    done
+    find "$dist" -mindepth 1 -maxdepth 1 ! -name "dentalcraft_${version}_linux_x86_64.tar.gz" \
+      ! -name "dentalcraft_${version}_windows_x86_64.zip" -exec rm -rf {} +
+  else
+    rm -rf "$dist"
+    mkdir -p "$dist"
+    # strategy.fail-fast: false - both entries run; the next jobs need both.
+    for n in linux_x86_64 windows_x86_64; do
+      [ -z "$only" ] || [ "$only" = "$n" ] || continue
+      printf '\n---------- build %s ----------\n' "$n"
+      set +e
+      if [ "$n" = linux_x86_64 ]; then app_build_linux "$tag"; else app_build_windows "$tag"; fi
+      rc=$?
+      set -e
+      if [ "$rc" -ne 0 ]; then failed=1; echo "##[error]build $n failed"; continue; fi
+      # actions/upload-artifact + download-artifact (merge-multiple) into one dist/
+      cp "$CACHE/app-binaries/$n/src/dist/"* "$dist/"
+    done
+    [ "$failed" = 0 ] || die "a build failed: nothing is attached"
+    if [ -n "$only" ]; then
+      if [ -n "$out" ]; then mkdir -p "$out" && cp "$dist"/* "$out/" && echo "copied to $out"; fi
+      echo "--only $only: stopping after packaging ($dist)"
+      return 0
+    fi
+  fi
+  printf '\n---------- installers ----------\n'
+  app_installers "$tag" "$no_sign" "$dist" || die "the installers job failed: nothing is attached"
+  cp "$CACHE/app-binaries/installers/src/installers/"* "$dist/"
+  if [ "$only" = installers ]; then
+    if [ -n "$out" ]; then mkdir -p "$out" && cp "$dist"/* "$out/" && echo "copied to $out"; fi
+    echo "--only installers: stopping before the release job ($dist)"
+    return 0
+  fi
+  printf '\n---------- attach to release ----------\n'
+  (
+    set -e
+    app_checkout "refs/tags/$tag" app-binaries/release
+    cd "$SRC"
+    rm -rf dist notes.md
+    # actions/download-artifact, every artifact (merge-multiple)
+    cp -r "$dist" dist
+    export TAG=$tag DENTALCRAFT_MINISIGN_KEY=
+    if [ "$no_sign" = 1 ]; then
+      echo "##[warning]--no-sign: no update.json, the update manifest is only ever published signed"
+    else
+      [ -f "$RELEASE_KEYS/minisign.key" ] || die "no $RELEASE_KEYS/minisign.key: pass --no-sign for an unsigned local test"
+      DENTALCRAFT_MINISIGN_KEY=$(cat "$RELEASE_KEYS/minisign.key")
+      run_step "Update manifest" "$APP_UPDATE_MANIFEST"
+      DENTALCRAFT_MINISIGN_KEY=
+    fi
+    (cd dist && run_step "Checksums" "$APP_CHECKSUMS")
+    cp dist/* "$dist/"
+    if [ -n "$out" ]; then mkdir -p "$out" && cp dist/* "$out/" && echo "copied to $out"; fi
+    if [ "$no_upload" = 1 ]; then echo "--no-upload: release assets in $dist"; exit 0; fi
+    export GH_TOKEN GH_REPO
+    GH_TOKEN=$(gh auth token) GH_REPO=$(gh_repo app)
+    run_step "Upload to the release" 'gh release view "$TAG" >/dev/null   # the release must already exist
+gh release upload "$TAG" dist/* --clobber'
+    run_step "Release notes" "$APP_RELEASE_NOTES"
     rm -f notes.md
   )
 }
@@ -479,7 +655,7 @@ tag=$(sed -n '"'"'s/^ *"tag": *"\(v[^"]*\)".*/\1/p'"'"' content/site.data.json |
 printf '"'"'%s'"'"' "$repo" | grep -Eq '"'"'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'"'"' || { echo "bad release.repo in content/site.data.json: '"'"'$repo'"'"'" >&2; exit 1; }
 printf '"'"'%s'"'"' "$tag" | grep -Eq '"'"'^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'"'"' || { echo "bad release.tag in content/site.data.json: '"'"'$tag'"'"'" >&2; exit 1; }
 mkdir -p downloads
-gh release download "$tag" -R "$repo" -p '"'"'dentalcraft_*'"'"' -D downloads
+gh release download "$tag" -R "$repo" -D downloads
 ls -l downloads
 sha256sum downloads/*'
     unset GH_TOKEN
@@ -492,7 +668,19 @@ sha256sum downloads/*'
       tags+=("$image:${ref#v}")
       version=${ref#v}
     fi
-    BUILD_ARGS=()
+    # Stands in for the DENTALCRAFT_GPG_KEY secret (build secret "gpg"): the env var when set,
+    # else the key in the dedicated GNUPGHOME. The file lives only for the build.
+    local gpgfile
+    gpgfile=$(mktemp "$CACHE/gpg.XXXXXX.asc")
+    trap 'rm -f "$gpgfile"' EXIT
+    if [ -n "${DENTALCRAFT_GPG_KEY:-}" ]; then
+      printf '%s\n' "$DENTALCRAFT_GPG_KEY" >"$gpgfile"
+    else
+      GNUPGHOME=$RELEASE_KEYS/gpg gpg --batch --armor --export-secret-keys "$RELEASE_GPG_FPR" >"$gpgfile"
+      GNUPGHOME=$RELEASE_KEYS/gpg gpgconf --kill gpg-agent || true
+    fi
+    [ -s "$gpgfile" ] || die "no release GPG key: set DENTALCRAFT_GPG_KEY or create $RELEASE_KEYS/gpg"
+    BUILD_ARGS=(--secret "id=gpg,src=$gpgfile")
     podman_build_push "$no_push" Containerfile \
       "org.opencontainers.image.source=https://github.com/$(gh_repo web)" \
       "org.opencontainers.image.revision=$sha" \
@@ -515,7 +703,7 @@ release_main() {
       cmd_release "$cmd" "$dry"
       ;;
     binaries)
-      local repo=${1:-} tag=${2:-} no_upload=0 out='' only=''
+      local repo=${1:-} tag=${2:-} no_upload=0 out='' only='' src='' no_sign=0
       [ -n "$repo" ] && [ -n "$tag" ] || usage
       shift 2
       while [ $# -gt 0 ]; do
@@ -523,12 +711,22 @@ release_main() {
           --no-upload) no_upload=1; shift ;;
           --out) [ $# -ge 2 ] || usage; out=$(realpath -m "$2"); shift 2 ;;
           --only) [ $# -ge 2 ] || usage; only=$2; shift 2 ;;
+          --src) [ $# -ge 2 ] || usage; src=$(realpath -e "$2") || die "--src: no such directory: $2"; shift 2 ;;
+          --no-sign) no_sign=1; shift ;;
           *) usage ;;
         esac
       done
       case "$repo" in
-        app) cmd_binaries_app "$tag" "$no_upload" "$out" "$only" ;;
-        server) [ -z "$only" ] || usage; cmd_binaries_server "$tag" "$no_upload" "$out" ;;
+        app)
+          if [ -n "$src" ]; then
+            git -C "$src" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "--src: $src is not a git working tree"
+          fi
+          APP_SRC=$src cmd_binaries_app "$tag" "$no_upload" "$out" "$only" "$no_sign"
+          ;;
+        server)
+          [ -z "$only$src" ] && [ "$no_sign" = 0 ] || usage
+          cmd_binaries_server "$tag" "$no_upload" "$out"
+          ;;
         *) usage ;;
       esac
       ;;
