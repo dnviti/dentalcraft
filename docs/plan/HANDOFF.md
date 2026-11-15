@@ -12,7 +12,7 @@ Released on 2026-11-15 through the local CI and release flow, every repo togethe
 
 - `dentalcraft-aligners` `v0.2.0-alpha.5` (PR #11, the whole chain `feat/teeth-components` → … → `feat/production` → `feat/aligner-preview`; release PR #12).
 - `dentalcraft-app` `v0.2.0-alpha.4` (PR #16 from `feat/installers`, which holds the app chain plus the installers and the updater; pins aligners `v0.2.0-alpha.5`; release PR #17). The release carries the two standalone archives, the AppImage, deb, signed rpm, Flatpak bundle, setup.exe, MSI, the signed `update.json` and `dentalcraft_0.2.0-alpha.4_SHA256SUMS.txt`. The Linux binaries need glibc 2.39 at most.
-- `dentalcraft-web` `main` `ba97e88` (PR #3): installers, Linux repositories, update manifest, downloads pinned to app `v0.2.0-alpha.4`. Image `ghcr.io/dnviti-personal-org/dentalcraft-web:sha-ba97e88` (and `:latest`), digest `sha256:1075a410804a3b22ae32d19cd2554165b96d2295c5eecc6c9969012c24ad2416`, about 280 MB compressed. It is waiting for the rollout on the hosting platform.
+REDACTED
 - Core and server: nothing due (only the `LICENSE.md` chores on `main`).
 - Website: every release also updates the site functions and What's new (CLAUDE.md Versioning item 6); 2026-11-15: content for 0.2.0-alpha.4 is live (web 2cbe845), dentalcraft-web runs with REDACTED.
 
@@ -120,7 +120,7 @@ Next:
 
 1. Done 2026-11-15: app `v0.2.0-alpha.4` released with every repo (see "Resume here").
 2. Optional speed-ups not done (estimates): fuse the CG vector passes in `solve.rs:143` (exact, 25–35% of the solve); pass the existing edge list into `fair` instead of rebuilding it (`fair.rs:102`); profile `gingiva::gum_weights` (8.8 + 5.7 s on pair ab, outside the build).
-REDACTED
+3. Done 2026-11-15: website live on `2cbe845` (`REDACTED-REVISION`, see "Resume here"); the planned `sha-ba97e88` rollout is superseded.
 4. Fixed (2026-11-15, with the installers; the `binaries.yml` change was authorized by the user): the release archives bundle `LICENSE.md`, `THIRD-PARTY-NOTICES.md`, the font licences and `install-kind`.
 
 ## Released: "Separa denti e gengiva" (Separate teeth and gum)
