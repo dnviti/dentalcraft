@@ -6,14 +6,20 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-15)
+## Resume here (2026-11-15, after the release)
 
-Branch chain, each pushed to origin and stacked on the previous one, in `dentalcraft-aligners` and `dentalcraft-app`:
-`feat/teeth-components` → `feat/setup-alignment` → `feat/tooth-region` → `feat/case-leftovers` → `feat/diagnosis-edit` → `feat/bite` → `feat/setup-tools` → `feat/staging-tools` → `feat/review` → `feat/production` (tip).
+Released on 2026-11-15 through the local CI and release flow, every repo together:
 
-- None of it is merged into `main`, and none is checked by eye in the window. Gates on the tip were green on 2026-11-14 22:05 (full `cargo test` in both repos), and the release build is in `dentalcraft-app/target/release/`.
-- Superproject `main` holds the docs commits locally (not pushed). The submodule gitlinks are not bumped.
+- `dentalcraft-aligners` `v0.2.0-alpha.5` (PR #11, the whole chain `feat/teeth-components` → … → `feat/production` → `feat/aligner-preview`; release PR #12).
+- `dentalcraft-app` `v0.2.0-alpha.4` (PR #16 from `feat/installers`, which holds the app chain plus the installers and the updater; pins aligners `v0.2.0-alpha.5`; release PR #17). The release carries the two standalone archives, the AppImage, deb, signed rpm, Flatpak bundle, setup.exe, MSI, the signed `update.json` and `dentalcraft_0.2.0-alpha.4_SHA256SUMS.txt`. The Linux binaries need glibc 2.39 at most.
+- `dentalcraft-web` `main` `ba97e88` (PR #3): installers, Linux repositories, update manifest, downloads pinned to app `v0.2.0-alpha.4`. Image `ghcr.io/dnviti-personal-org/dentalcraft-web:sha-ba97e88` (and `:latest`), digest `sha256:1075a410804a3b22ae32d19cd2554165b96d2295c5eecc6c9969012c24ad2416`, about 280 MB compressed. It is waiting for the rollout on the hosting platform.
+- Core and server: nothing due (only the `LICENSE.md` chores on `main`).
+
+- None of the chain is checked by eye in the window yet.
 - Gap map: [`PORT-GAP-MAP.md`](PORT-GAP-MAP.md) is the source of truth for what is left.
+
+The four notes below describe the work as it was before the release; all of it is now merged and released as listed above.
+
 - Scans closed at import (2026-11-15, `feat/aligner-preview` of aligners and app, not committed; gap map 1.6 DONE): open arch scans are closed with a base by `aligners.case.import-scans` (seedless `occlusal_axis`, base labels 0), the scan as read kept as a prefix (`AlignersState::scan_bases`, with `closed_by`: import, hand, tooth marks; `dca-module/src/open_scan.rs`); make-base rebuilds from it. The Import scans inspector ("Base under the scans") shows per arch scan how it is closed and its button ("Close with a base", "Run again"). Checked: round trip with undo/redo in `dc-workspace/tests/save.rs`; real scans in `dca-module/tests/import_real.rs` (the prefix equals the file as the oracles read it, 4/4); `autoseed_real` 4/4 and `segmentation_real` scan d green; CLI import of scan d 0.53 s (2450 border edges, +2450 points, +7344 triangles, watertight, kept by save and reopen). Left: the full gates and the release build of the whole workspace (see DECISIONS.md, 2026-11-15).
 - Installers, site side (2026-11-15, `dentalcraft-web` `feat/installers`, not committed): release keys generated once in `~/.config/dentalcraft-release/` (GPG ed25519 `83B0A31CA19DE14A1648A875C10CE2EB009DE538`, minisign `B155D07CF2A36DB0`; public halves in `dentalcraft-web/keys/`); `/en|it/download/` with Installer or Standalone per OS; the image build makes the signed APT, RPM and Flatpak repositories and `/update/stable.json(.minisig)` from the pinned app release (build secret `gpg` = `DENTALCRAFT_GPG_KEY`); `dentalcraft-app/packaging/update-manifest.py` signs the manifest. Details: `dentalcraft-web/README.md`.
 - Installers, packaging side (2026-11-15, `dentalcraft-app` `feat/installers`, shared working copy `/tmp/dc-installers/dentalcraft-app`, not committed): `packaging/installers.sh` builds the AppImage, deb, signed rpm, Flatpak (runtime 25.08, signed commit), setup.exe (NSIS, per user, silent `/S`) and MSI (wixl, per machine, UpgradeCode `{90BDCF16-C5BE-4030-B024-F81F76394F48}`, never change it) from the two archives, which now also hold `LICENSE.md`, `THIRD-PARTY-NOTICES.md` and `install-kind`. `binaries.yml` gains the `installers` job, the signed `update.json` and `dentalcraft_<V>_SHA256SUMS.txt` (new secrets `DENTALCRAFT_GPG_KEY`, `DENTALCRAFT_MINISIGN_KEY`, not set yet). `scripts/release-local.sh binaries app` replays it and now builds linux in the pinned runner image (glibc 2.39; the host build of alpha.3 needs glibc 2.44); new flags `--src`, `--no-sign`, `--only installers`. Details: `dentalcraft-app/packaging/README.md`, `docs/local-ci.md`.
@@ -30,8 +36,7 @@ Next, in order:
    - the `shell_reach` oracle;
    - the contact overlays (12.11). The aligner in the 3D view (12.8) is done on `feat/aligner-preview` (aligners, app; not committed): `aligners.view.aligner` / `-exact`, layer "Aligner" in the new toolbar group "Models in the view" (Study models, Target position, Aligner; the five-icon Layers group did not fit beside the cube at 960 x 640), the Aligners inspector section; oracle `dca-algo/tests/aligner_view_oracle.rs` bit for bit with the plugin's `_bind`/`_deform` (fused multiply-adds as numpy's sgemm); ignored golden test green (preview 5.2 s per arch at stage 2, exact Draft 7.7-8.0 s, the export's STL byte for byte); not done: `preview_auto_bases`, a check by eye.
 3. Then gap-map items 9 to 13 in order: study models, export and print, visits, steps, display and help.
-4. Merge to `main`: one PR per repo from `feat/production` (it contains the whole chain), local CI, merge, aligners release first, then bump the app pin.
-   - Per the product rule, a release request means every repo together.
+4. Done 2026-11-15: merged and released (see "Resume here").
 
 Decisions waiting for the user:
 - Leaving a project that has a file saves without asking (current behaviour).
@@ -67,10 +72,10 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 | Submodule | Tag | Notes |
 | --- | --- | --- |
 | `dentalcraft-core` | `v0.3.0-alpha.2` | module scene entries with arch, tooth and stage. `main` `796bb30` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-aligners` | `v0.2.0-alpha.4` | 3D teeth finish (non-finite guard, cancel, faster untangle), teeth basis for "out of date", menu grouped by function with the manual tools out of the menu, delete a tooth mark (PR #9, release PR #10, 2026-11-13) |
-| `dentalcraft-app` | `v0.2.0-alpha.3` | separate teeth and gum inspector, EULA, "Licence and notices" dialog, third-party notices; linux and windows binaries on the release |
+| `dentalcraft-aligners` | `v0.2.0-alpha.5` | case tools, bite, final position, staging, review, production and the aligner in the 3D view, study models kept in the case, open scans closed at import (PR #11, release PR #12, 2026-11-15) |
+| `dentalcraft-app` | `v0.2.0-alpha.4` | the app side of the same chain, installers for Linux and Windows (AppImage, deb, rpm, Flatpak, setup.exe, MSI) and automatic updates (PR #16, release PR #17, 2026-11-15); assets with the signed `update.json` and SHA256SUMS |
 | `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-web` | none (`main` `2498eb2`) | no release-please; licence page, downloads point at app `v0.2.0-alpha.3`. Image `ghcr.io/dnviti-personal-org/dentalcraft-web:latest` and `:sha-2498eb2` pushed (digest `sha256:cd1ac5ef558f1e4f60a2085515a4154e94b2730fd5d5f44079f7ea6b15971231`); the hosting platform service `dentalcraft-web` is not rolled out to it |
+| `dentalcraft-web` | none (`main` `ba97e88`) | no release-please; installers, Linux repositories, update manifest, downloads pinned to app `v0.2.0-alpha.4` (PR #3). Image `ghcr.io/dnviti-personal-org/dentalcraft-web:latest` and `:sha-ba97e88` pushed (digest `sha256:1075a410804a3b22ae32d19cd2554165b96d2295c5eecc6c9969012c24ad2416`); the hosting platform service `dentalcraft-web` is not rolled out to it yet |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
@@ -112,7 +117,7 @@ Save everything and automatic save (2026-11-13, merged in `dentalcraft-app` PR #
 
 Next:
 
-1. Release the app (and every other repo with pending work) when the user asks for a release.
+1. Done 2026-11-15: app `v0.2.0-alpha.4` released with every repo (see "Resume here").
 2. Optional speed-ups not done (estimates): fuse the CG vector passes in `solve.rs:143` (exact, 25–35% of the solve); pass the existing edge list into `fair` instead of rebuilding it (`fair.rs:102`); profile `gingiva::gum_weights` (8.8 + 5.7 s on pair ab, outside the build).
 REDACTED
 4. Fixed (2026-11-15, with the installers; the `binaries.yml` change was authorized by the user): the release archives bundle `LICENSE.md`, `THIRD-PARTY-NOTICES.md`, the font licences and `install-kind`.
