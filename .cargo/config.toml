@@ -22,6 +22,9 @@ dc-theme = { path = "dentalcraft-core/crates/dc-theme" }
 dc-session = { path = "dentalcraft-core/crates/dc-session" }
 dc-mcp = { path = "dentalcraft-core/crates/dc-mcp" }
 dc-raster = { path = "dentalcraft-core/crates/dc-raster" }
+dc-scanner = { path = "dentalcraft-core/crates/dc-scanner" }
+dc-ble = { path = "dentalcraft-core/crates/dc-ble" }
+dc-turntable = { path = "dentalcraft-core/crates/dc-turntable" }
 
 [patch."https://github.com/dnviti-personal-org/dentalcraft-aligners.git"]
 dca-model = { path = "dentalcraft-aligners/crates/dca-model" }
