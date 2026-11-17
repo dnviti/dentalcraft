@@ -32,12 +32,13 @@ kani_check_installed() {
     die "cargo-kani not found: cargo install --locked kani-verifier && cargo kani setup"
 }
 
-# cargo kani under the memory cap; the scope keeps this environment.
+# cargo kani under the memory cap; the scope keeps this environment. The empty
+# RUSTC_WRAPPER turns off the superproject's sccache: Kani has its own compiler.
 KANI_MEM=${DC_KANI_MEM:-16G}
 kani_cmd() {
   local args=''
   [ $# -eq 0 ] || args=$(printf '%q ' "$@")
-  printf 'systemd-run --user --scope --quiet -p MemoryMax=%s -p MemorySwapMax=0 cargo kani --workspace %s' \
+  printf 'RUSTC_WRAPPER= systemd-run --user --scope --quiet -p MemoryMax=%s -p MemorySwapMax=0 cargo kani --workspace %s' \
     "$KANI_MEM" "$args"
 }
 

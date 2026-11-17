@@ -61,6 +61,8 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test   #
 go vet ./... && gofmt -l . && go test -race ./...                               # server
 ```
 
+Builds inside the superproject use sccache (`rustc-wrapper`) and the mold linker, set in `.cargo/config.toml` (Fedora: `sudo dnf install mold sccache`). `ci-local.sh` and `release-local.sh` build outside the superproject with a clean environment, so they never use them and stay identical to the runners. `sccache --show-stats` shows the cache hits.
+
 REDACTED
 
 Auth integration test (off by default, needs the Go server):

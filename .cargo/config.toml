@@ -1,6 +1,16 @@
 # Used only for builds started from inside this superproject.
 # Standalone builds of a submodule (CI) do not read it.
 
+# Faster local builds: sccache caches compiled crates, mold links. Dev only:
+# ci-local.sh and release-local.sh build outside the superproject with a clean
+# environment, exactly like the runners, so they use neither.
+# Fedora: sudo dnf install mold sccache.
+[build]
+rustc-wrapper = "sccache"
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
 [net]
 # Private git dependencies are fetched with the git CLI so that the SSH agent
 # and the credential helpers are honoured.
