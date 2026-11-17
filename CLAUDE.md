@@ -98,6 +98,12 @@ Internal path dependencies must not carry a `version =` requirement (release-ple
 - Jobs pin the GitHub SSH host key. Private cross-repo access uses read-only deploy keys, secrets `DEPLOY_KEY_CORE` and `DEPLOY_KEY_ALIGNERS` in the consumers.
 - Checks do not run on release-please PRs opened by `github-actions[bot]` (events by that token do not trigger workflows). Merge those PRs without the checks, or switch release-please to a PAT.
 
+## Formal verification (Kani)
+
+- Laws are Kani proof harnesses in `#[cfg(kani)] mod kani_proofs`. The runner and `ci-local.sh` never see them. Conventions, install notes and the list of current laws: [`docs/kani.md`](docs/kani.md).
+- When the user states a rule that must always hold, write it as a law: find the pure function that decides it, write the harness, fix the code if the law fails, and add the law to the table in `docs/kani.md`. Never weaken a law to make it pass.
+- Before merging a change to code covered by laws, run `scripts/kani-local.sh <core|aligners|app>` on the committed ref, together with `ci-local.sh`. Run `scripts/kani-local.sh <repo> --dev` while iterating.
+
 ## Constraints
 
 - Pure Rust, no C++ toolchain on the build machines: `rustls` with `ring` (not `aws-lc`), `zip` with deflate (not zstd).
