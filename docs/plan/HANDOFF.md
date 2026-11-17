@@ -6,9 +6,27 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-17, after the release)
+## Resume here (2026-11-17 evening, Kani release)
 
-Released on 2026-11-17 through the local CI and release flow, every repo together:
+Next, in order:
+1. **Build/release pipeline overhaul** (user request 2026-11-17 23:01): the best possible build and release pipeline.
+   - sccache shared across core, aligners and app in `ci-local.sh`, in `release-local.sh` (mounted in the runner container) AND in the `.github` workflows (editing the workflows needs the user's OK).
+   - mold for dev builds only, not release: the binaries must match the runner.
+   - Profile where release time goes (Windows podman build, installers, flatpak).
+   - Plan first, then implement.
+2. Kani on the merged refs was skipped tonight (only the working trees were verified): run `scripts/kani-local.sh core --ref origin/main`, then aligners and app.
+
+Released on the evening of 2026-11-17 through the local CI and release flow:
+
+- Formal verification with Kani: 35 proof harnesses (`#[cfg(kani)] mod kani_proofs`): core 19, aligners 13, app 3. `scripts/kani-local.sh`, [`docs/kani.md`](../kani.md) (laws table, install, conventions), CLAUDE.md "Formal verification (Kani)". Kani is a local gate; `ci-local.sh` and the runners never run it.
+- Dev builds inside the superproject use sccache and mold (`.cargo/config.toml`); `ci-local.sh` and `release-local.sh` do not.
+- `dentalcraft-core`: PR #14 `test: add Kani proof harnesses` merged (`1686bec`); no user-facing commit, so no release: the tag stays `v0.3.0-alpha.3` and the gitlink sits one commit past it (like server).
+- `dentalcraft-aligners` `v0.2.0-alpha.7` (PR #15, release PR #16): fixes found by Kani: days of wear validated 5..=21 in the schedule and export commands, stage day guarded against NaN, next visit on an empty calendar, seed change reported independently of order.
+- `dentalcraft-app` `v0.2.0-alpha.6` (PR #20, release PR #21): week of a stage without overflow on the timeline, move to aligners `v0.2.0-alpha.7`; third-party notices regenerated, unchanged. All 11 assets (8 formats, SHA256SUMS, signed `update.json`), glibc ≤ 2.39.
+- Server: nothing due (dry-run: no user-facing commits).
+- `dentalcraft-web` `main` `8bd3499` (PR #6, by the web session): What's new and downloads for `0.2.0-alpha.6`. Image build and hosting platform rollout are owned by that session; check that https://dentalcraft.app shows `0.2.0-alpha.6`.
+
+Earlier on 2026-11-17, every repo together:
 
 - `dentalcraft-core` `v0.3.0-alpha.3` (PR #12, release PR #13): the in-app 3D scanner connector (alpha) with the Revopoint MINI 2 (`revopoint-usb`, no vendor SDK), the optional `revopoint-sdk` backend, the simulated scanner, and the Revopoint dual-axis turntable over Bluetooth LE (`dc-ble`, `dc-turntable`, `scan.auto`, `turntable.calibrate`).
 - `dentalcraft-aligners` `v0.2.0-alpha.6` (PR #13 `fix(deps)`, release PR #14): only the move to core `v0.3.0-alpha.3`.
@@ -75,11 +93,11 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 
 | Submodule | Tag | Notes |
 | --- | --- | --- |
-| `dentalcraft-core` | `v0.3.0-alpha.3` | in-app 3D scanner connector (alpha): `dc-scanner` (sim, `revopoint-usb` V4L2 without vendor SDK, runtime-loaded `revopoint-sdk`; tracking, TSDF fusion, `ScanEditor`, `scan.*` / `turntable.*` / `scan.auto` commands, tool-free turntable axis calibration with ROI), `dc-ble` (pure-Rust BLE link: BlueZ over zbus, WinRT), `dc-turntable` (generic traits, sim, Revopoint dual-axis BLE), point clouds, TSDF, cloud meshing, hole filling and repair in `dc-mesh`/`dc-geom` (PR #12, release PR #13, 2026-11-17) |
-| `dentalcraft-aligners` | `v0.2.0-alpha.6` | moved to core `v0.3.0-alpha.3`, no functional change (PR #13 `fix(deps)`, release PR #14, 2026-11-17) |
-| `dentalcraft-app` | `v0.2.0-alpha.5` | Scan button and scan popup with turntable block (alpha), point-cloud rendering in `dc-viewport`; fixes: sign-in session kept across restarts (keyring → private file fallback, Flatpak gets `org.freedesktop.secrets`), exact numbers on save and reopen (`serde_json` `float_roundtrip`) (PR #18, release PR #19, 2026-11-17); all 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
+| `dentalcraft-core` | `v0.3.0-alpha.3` | in-app 3D scanner connector (alpha): `dc-scanner` (sim, `revopoint-usb` V4L2 without vendor SDK, runtime-loaded `revopoint-sdk`; tracking, TSDF fusion, `ScanEditor`, `scan.*` / `turntable.*` / `scan.auto` commands, tool-free turntable axis calibration with ROI), `dc-ble` (pure-Rust BLE link: BlueZ over zbus, WinRT), `dc-turntable` (generic traits, sim, Revopoint dual-axis BLE), point clouds, TSDF, cloud meshing, hole filling and repair in `dc-mesh`/`dc-geom` (PR #12, release PR #13, 2026-11-17). `main` `1686bec` adds only the Kani proof harnesses (PR #14, `test`, no release) |
+| `dentalcraft-aligners` | `v0.2.0-alpha.7` | fixes found by Kani: days of wear validated 5..=21 in the schedule and export commands, stage day guarded against NaN, next visit on an empty calendar, order-independent seed change; 13 Kani harnesses (PR #15, release PR #16, 2026-11-17) |
+| `dentalcraft-app` | `v0.2.0-alpha.6` | week of a stage without overflow on the timeline, move to aligners `v0.2.0-alpha.7`; 3 Kani harnesses (PR #20, release PR #21, 2026-11-17); all 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
 | `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-web` | none (`main` `92cb559`) | no release-please; scanning and turntable content, What's new and downloads for app `v0.2.0-alpha.5` (PR #5). Image `ghcr.io/dnviti-personal-org/dentalcraft-web:sha-92cb559` (digest `sha256:eee0a04004f4bec497554c3f3e23880b98f57d6afbd1accdb1bb315feaa108fa`) |
+| `dentalcraft-web` | none (`main` `8bd3499`) | no release-please; What's new for `0.2.0-alpha.6` (days-of-wear checks, fixes, Kani proofs) and its downloads (PR #6, 2026-11-17). Previous: scanning and turntable content, `0.2.0-alpha.5` (PR #5, image `sha-92cb559`) |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
