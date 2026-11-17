@@ -1,4 +1,4 @@
-# Handoff, 2026-11-14
+# Handoff, 2026-11-17
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -6,15 +6,18 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-15, after the release)
+## Resume here (2026-11-17, after the release)
 
-Released on 2026-11-15 through the local CI and release flow, every repo together:
+Released on 2026-11-17 through the local CI and release flow, every repo together:
 
-- `dentalcraft-aligners` `v0.2.0-alpha.5` (PR #11, the whole chain `feat/teeth-components` → … → `feat/production` → `feat/aligner-preview`; release PR #12).
-- `dentalcraft-app` `v0.2.0-alpha.4` (PR #16 from `feat/installers`, which holds the app chain plus the installers and the updater; pins aligners `v0.2.0-alpha.5`; release PR #17). The release carries the two standalone archives, the AppImage, deb, signed rpm, Flatpak bundle, setup.exe, MSI, the signed `update.json` and `dentalcraft_0.2.0-alpha.4_SHA256SUMS.txt`. The Linux binaries need glibc 2.39 at most.
-REDACTED
-- Core and server: nothing due (only the `LICENSE.md` chores on `main`).
-- Website: every release also updates the site functions and What's new (CLAUDE.md Versioning item 6); 2026-11-15: content for 0.2.0-alpha.4 is live (web 2cbe845), dentalcraft-web runs with REDACTED.
+- `dentalcraft-core` `v0.3.0-alpha.3` (PR #12, release PR #13): the in-app 3D scanner connector (alpha) with the Revopoint MINI 2 (`revopoint-usb`, no vendor SDK), the optional `revopoint-sdk` backend, the simulated scanner, and the Revopoint dual-axis turntable over Bluetooth LE (`dc-ble`, `dc-turntable`, `scan.auto`, `turntable.calibrate`).
+- `dentalcraft-aligners` `v0.2.0-alpha.6` (PR #13 `fix(deps)`, release PR #14): only the move to core `v0.3.0-alpha.3`.
+- `dentalcraft-app` `v0.2.0-alpha.5` (PR #18, release PR #19): Scan button and scan popup with the turntable block; fixes for the sign-in session across restarts and exact numbers on save and reopen. All installers, signed `update.json`, `dentalcraft_0.2.0-alpha.5_SHA256SUMS.txt`.
+- `dentalcraft-web` `main` `92cb559` (PR #5): scanning and turntable content, What's new and downloads for `0.2.0-alpha.5`. Live on the hosting platform as revision `REDACTED-REVISION` since 2026-11-17 10:47 (image `sha-92cb559`, REDACTED). The REDACTED service quota is REDACTED again: the next site rollout must wait for REDACTED or needs a decision first.
+- Server: nothing due (only the `LICENSE.md` chore on `main`).
+- Superproject: `hardware/scan-enclosure` (parametric enclosure for the MINI 2 and the turntable, LED lighting with an MCU-less brightness controller). Not printed yet; its open points (sharp edges, missing inside fillets, measurements to take) are in its README.
+- Scanner facts: managed skills `revopoint-mini2-usb-facts` and `revopoint-dual-axis-turntable-ble-facts`.
+- Known: one harmless Windows-only warning (unused field `options` in `dc-scanner/src/revopoint_usb/mod.rs:127`); the scanner was tested on hardware only on Linux, not yet on a dental model.
 
 - None of the chain is checked by eye in the window yet.
 - Gap map: [`PORT-GAP-MAP.md`](PORT-GAP-MAP.md) is the source of truth for what is left.
@@ -72,11 +75,11 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 
 | Submodule | Tag | Notes |
 | --- | --- | --- |
-| `dentalcraft-core` | `v0.3.0-alpha.2` | module scene entries with arch, tooth and stage. `main` `796bb30` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-aligners` | `v0.2.0-alpha.5` | case tools, bite, final position, staging, review, production and the aligner in the 3D view, study models kept in the case, open scans closed at import (PR #11, release PR #12, 2026-11-15) |
-| `dentalcraft-app` | `v0.2.0-alpha.4` | the app side of the same chain, installers for Linux and Windows (AppImage, deb, rpm, Flatpak, setup.exe, MSI) and automatic updates (PR #16, release PR #17, 2026-11-15); assets with the signed `update.json` and SHA256SUMS |
+| `dentalcraft-core` | `v0.3.0-alpha.3` | in-app 3D scanner connector (alpha): `dc-scanner` (sim, `revopoint-usb` V4L2 without vendor SDK, runtime-loaded `revopoint-sdk`; tracking, TSDF fusion, `ScanEditor`, `scan.*` / `turntable.*` / `scan.auto` commands, tool-free turntable axis calibration with ROI), `dc-ble` (pure-Rust BLE link: BlueZ over zbus, WinRT), `dc-turntable` (generic traits, sim, Revopoint dual-axis BLE), point clouds, TSDF, cloud meshing, hole filling and repair in `dc-mesh`/`dc-geom` (PR #12, release PR #13, 2026-11-17) |
+| `dentalcraft-aligners` | `v0.2.0-alpha.6` | moved to core `v0.3.0-alpha.3`, no functional change (PR #13 `fix(deps)`, release PR #14, 2026-11-17) |
+| `dentalcraft-app` | `v0.2.0-alpha.5` | Scan button and scan popup with turntable block (alpha), point-cloud rendering in `dc-viewport`; fixes: sign-in session kept across restarts (keyring → private file fallback, Flatpak gets `org.freedesktop.secrets`), exact numbers on save and reopen (`serde_json` `float_roundtrip`) (PR #18, release PR #19, 2026-11-17); all 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
 | `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-web` | none (`main` `ba97e88`) | no release-please; installers, Linux repositories, update manifest, downloads pinned to app `v0.2.0-alpha.4` (PR #3). Image `ghcr.io/dnviti-personal-org/dentalcraft-web:latest` and `:sha-ba97e88` pushed (digest `sha256:1075a410804a3b22ae32d19cd2554165b96d2295c5eecc6c9969012c24ad2416`); the hosting platform service `dentalcraft-web` is not rolled out to it yet |
+| `dentalcraft-web` | none (`main` `92cb559`) | no release-please; scanning and turntable content, What's new and downloads for app `v0.2.0-alpha.5` (PR #5). Image `ghcr.io/dnviti-personal-org/dentalcraft-web:sha-92cb559` (digest `sha256:eee0a04004f4bec497554c3f3e23880b98f57d6afbd1accdb1bb315feaa108fa`) |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
