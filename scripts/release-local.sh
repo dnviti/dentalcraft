@@ -3,20 +3,25 @@
 # GitHub Actions are disabled (docs/local-ci.md). The workflow files under
 # .github/ stay the source of truth: keep this script in step with them.
 #
-#   scripts/release-local.sh <core|aligners|app|server> [--dry-run]
+#   scripts/release-local.sh <core|aligners|app|server> [--dry-run] [--require-authenticode (app)]
 #       release-please.yml: `github-release`, then `release-pr`, with the
 #       release-please version bundled in googleapis/release-please-action@v5.
 #       When a release is created, the chained jobs follow: app -> binaries,
 #       server -> image + binaries. Requires local main == origin/main and a
 #       passing `scripts/ci-local.sh <repo> --ref origin/main` on that commit.
 #   scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only NAME]
-#                                     [--src DIR] [--no-sign]
+#                                     [--src DIR] [--no-sign] [--require-authenticode]
 #       binaries.yml alone (workflow_dispatch). --no-upload builds and packages
 #       only; --out copies the release assets to DIR; --only (app: linux_x86_64,
 #       windows_x86_64 or installers) runs one job and stops there (installers
 #       reuses the two archives of the last run). app only, local tests (need
 #       --no-upload): --src DIR builds a working tree (its HEAD plus uncommitted
-#       changes) instead of the tag; --no-sign builds without the release keys.
+#       changes) instead of the tag; --no-sign builds without the release keys
+#       (no GPG, minisign or Authenticode signature). The Windows programs and
+#       installers are Authenticode-signed with the self-signed key in
+#       ~/.config/dentalcraft-release/authenticode; without that directory they
+#       stay unsigned with a warning, unless --require-authenticode (app only),
+#       which fails instead.
 #   scripts/release-local.sh image server <tag> [--no-push]
 #       dentalcraft-server image.yml alone (workflow_dispatch).
 #   scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
@@ -50,8 +55,14 @@ PKG_IMAGE=registry.fedoraproject.org/fedora:45
 # minisign for the update manifest. They stand in for the DENTALCRAFT_* secrets.
 RELEASE_KEYS=${DENTALCRAFT_RELEASE_KEYS:-$HOME/.config/dentalcraft-release}
 RELEASE_GPG_FPR=83B0A31CA19DE14A1648A875C10CE2EB009DE538
+# The self-signed Authenticode key of the Windows programs and installers (directory with
+# dentalcraft-selfsigned.p12 and storepass, format in packaging/windows/authenticode.sh),
+# standing in for the DENTALCRAFT_AUTHENTICODE_* secrets.
+AUTHENTICODE_KEYS=$RELEASE_KEYS/authenticode
+# --require-authenticode: fail instead of leaving the Windows files unsigned.
+APP_REQUIRE_AUTHENTICODE=0
 
-usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gh_repo() { printf '%s/dentalcraft-%s\n' "$ORG" "$1"; }
 
@@ -259,15 +270,34 @@ rustup toolchain install $RUST_TOOLCHAIN --profile minimal --target \$TARGET --n
 rustup default $RUST_TOOLCHAIN
 rustc --version --verbose"
 step "Build" "$STEP_BUILD"
+[ -z "${STEP_SIGN:-}" ] || step "Sign the Windows programs" "$STEP_SIGN"
 step "Package" "$STEP_PACKAGE"'
+
+# "Sign the Windows programs" of binaries.yml, after its key directory is written:
+# the Authenticode signature of the two programs, before they are packed.
+APP_SIGN_PROGRAMS='bash packaging/windows/authenticode.sh "target/$TARGET/release/dentalcraft.exe" "target/$TARGET/release/dentalcraft-cli.exe"'
+
+# The podman options that hand the Authenticode key to packaging/windows/authenticode.sh:
+# $AUTHENTICODE_KEYS mounted read-only (the runner writes the DENTALCRAFT_AUTHENTICODE_*
+# secrets into a directory the same way), unless no_sign or the directory is absent; then
+# the script warns, or fails with --require-authenticode. Arg: no_sign. Sets AUTHENTICODE_PODMAN.
+authenticode_podman_args() {
+  AUTHENTICODE_PODMAN=(-e AUTHENTICODE_REQUIRED="$APP_REQUIRE_AUTHENTICODE")
+  if [ "$1" = 0 ] && [ -d "$AUTHENTICODE_KEYS" ]; then
+    AUTHENTICODE_PODMAN+=(-v "$AUTHENTICODE_KEYS:/run/secrets/authenticode:ro"
+      -e AUTHENTICODE_KEY_DIR=/run/secrets/authenticode)
+  fi
+}
 
 # One build job in a throwaway container (removed with --rm) of an image, as root so
 # that the files written into the checkout stay yours. rustup and the cargo registry
 # live in mounted cache directories, so that reruns are incremental.
-# Args: image matrix-name target install-c-toolchain-step. Needs SRC and TAG.
+# Args: image matrix-name target install-c-toolchain-step [sign-step no_sign]. Needs SRC and TAG.
 app_build_in_container() (
   set -e
-  image=$1 name=$2 target=$3 c_toolchain=$4 cache=$CACHE/app-binaries/$2 cname="dc-ci-$2-$$"
+  image=$1 name=$2 target=$3 c_toolchain=$4 sign=${5:-} cache=$CACHE/app-binaries/$2 cname="dc-ci-$2-$$"
+  AUTHENTICODE_PODMAN=()
+  [ -z "$sign" ] || authenticode_podman_args "$6"
   mkdir -p "$cache/rustup" "$cache/cargo-home"
   [ -n "${SSH_AUTH_SOCK:-}" ] || die "no ssh agent (SSH_AUTH_SOCK): the private dependencies are fetched over SSH"
   printf '\n##[group]Container %s (%s), removed on exit\n##[endgroup]\n' "$cname" "$image"
@@ -283,7 +313,8 @@ app_build_in_container() (
     -e CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
     -e ORG="$ORG" -e GITHUB_HOST_KEY="$GITHUB_HOST_KEY" -e RUST_TOOLCHAIN="$RUST_TOOLCHAIN" \
     -e STEP_TAG_CHECK="$APP_TAG_CHECK" -e STEP_C_TOOLCHAIN="$c_toolchain" \
-    -e STEP_BUILD="$APP_BUILD" -e STEP_PACKAGE="$APP_PACKAGE" \
+    -e STEP_BUILD="$APP_BUILD" -e STEP_SIGN="$sign" -e STEP_PACKAGE="$APP_PACKAGE" \
+    "${AUTHENTICODE_PODMAN[@]}" \
     "$image" bash --noprofile --norc -c "$BUILD_DRIVER"
 )
 
@@ -305,7 +336,7 @@ app_build_linux() (
 )
 
 # windows_x86_64: the runner installs mingw64-gcc and zip; here that happens in a
-# throwaway Fedora container, which also needs git and ssh.
+# throwaway Fedora container, which also needs git and ssh. Args: tag no_sign.
 WIN_C_TOOLCHAIN='dnf install -y -q gcc make pkgconf-pkg-config mingw64-gcc zip git-core openssh-clients >/dev/null
 x86_64-w64-mingw32-gcc --version | head -n 1'
 app_build_windows() (
@@ -313,7 +344,8 @@ app_build_windows() (
   tag=$1
   app_checkout "refs/tags/$tag" app-binaries/windows_x86_64
   rm -rf "$SRC/dist" "$SRC"/dentalcraft_*
-  TAG=$tag app_build_in_container "$WIN_IMAGE" windows_x86_64 x86_64-pc-windows-gnu "$WIN_C_TOOLCHAIN"
+  TAG=$tag app_build_in_container "$WIN_IMAGE" windows_x86_64 x86_64-pc-windows-gnu "$WIN_C_TOOLCHAIN" \
+    "$APP_SIGN_PROGRAMS" "$2"
 )
 
 # The installers job: packaging/installers.sh builds the AppImage, deb, rpm, Flatpak,
@@ -356,6 +388,15 @@ app_installers() (
     -v "$cache/cache:/var/cache/dentalcraft-installers" -e DC_PKG_CACHE=/var/cache/dentalcraft-installers \
     -e TAG="$tag" -e SOURCE_DATE_EPOCH -e ALLOW_UNSIGNED \
     "$PKG_IMAGE" bash packaging/installers.sh
+  # "Sign the Windows installers": setup.exe and the MSI (they already hold the signed
+  # programs), in another throwaway container of the same image, before the release job
+  # hashes them for update.json and the checksums.
+  authenticode_podman_args "$no_sign"
+  printf '\n##[group]Container %s-sign (%s), removed on exit\n##[endgroup]\n' "$cname" "$PKG_IMAGE"
+  podman run --rm --name "$cname-sign" --security-opt label=disable \
+    -v "$SRC:/work/dentalcraft-app" -w /work/dentalcraft-app "${AUTHENTICODE_PODMAN[@]}" \
+    "$PKG_IMAGE" bash packaging/windows/authenticode.sh \
+    "installers/DentalCraft-$version-setup.exe" "installers/DentalCraft-$version-x86_64.msi"
 )
 
 # "Update manifest", "Checksums" (in dist/) and "Release notes" of the release job, verbatim.
@@ -389,7 +430,14 @@ if ! grep -qF "$marker" notes.md; then
     echo "- Updates: the \`.deb\` and the \`.rpm\` add the DentalCraft apt or dnf repository, the Flatpak updates from the DentalCraft Flatpak repository, the other versions check dentalcraft.app at startup."
     echo "- Each download also holds \`dentalcraft-cli\`: the command line and MCP server that drive DentalCraft headless or through a running app."
     echo "- Verify the downloads against \`dentalcraft_${VERSION}_SHA256SUMS.txt\`. The Linux packages and repositories are signed with the DentalCraft release key, https://dentalcraft.app/keys/dentalcraft.gpg."
-    echo "- **The Windows programs are not code-signed.** SmartScreen may warn."
+    # Signed or not: the certificate table (PE data directory 4) of setup.exe is empty when unsigned.
+    if python3 -c '"'"'import struct,sys; d=open(sys.argv[1],"rb").read(); p=struct.unpack_from("<I",d,60)[0]; o=p+24+(96 if struct.unpack_from("<H",d,p+24)[0]==0x10b else 112); sys.exit(0 if struct.unpack_from("<I",d,o+36)[0] else 1)'"'"' "dist/DentalCraft-${VERSION}-setup.exe"; then
+      # The sha256 fingerprint of the pinned self-signed certificate (DER), the only key authenticode.sh accepts.
+      fpr=$(python3 -c '"'"'import base64,hashlib,sys; t=open(sys.argv[1]).read(); print(hashlib.sha256(base64.b64decode(t.split("-----BEGIN CERTIFICATE-----")[1].split("-----END CERTIFICATE-----")[0])).hexdigest().upper())'"'"' packaging/windows/dentalcraft-selfsigned.crt.pem)
+      echo "- The Windows programs and installers carry a **self-signed** Authenticode signature (with an RFC 3161 timestamp). Windows does not trust a self-signed certificate, so SmartScreen still warns and shows an unknown publisher. Certificate SHA-256 fingerprint: \`${fpr}\`."
+    else
+      echo "- **The Windows programs are not code-signed.** SmartScreen may warn."
+    fi
   } >> notes.md
   gh release edit "$TAG" --notes-file notes.md
 fi'
@@ -415,6 +463,12 @@ $APP_TAG_CHECK"
   if [ "$no_upload" = 0 ] && { [ -n "$APP_SRC" ] || [ "$no_sign" = 1 ]; }; then
     die "--src and --no-sign are for local tests: add --no-upload"
   fi
+  if [ "$APP_REQUIRE_AUTHENTICODE" = 1 ]; then
+    [ "$no_sign" = 0 ] || die "--require-authenticode and --no-sign exclude each other"
+    [ -d "$AUTHENTICODE_KEYS" ] || die "--require-authenticode: no Authenticode key in $AUTHENTICODE_KEYS (docs/local-ci.md)"
+  elif [ "$no_sign" = 0 ] && [ ! -d "$AUTHENTICODE_KEYS" ]; then
+    echo "##[warning]no $AUTHENTICODE_KEYS: the Windows programs and installers will not be Authenticode-signed"
+  fi
   lock "binaries-app-$tag"
   podman_note_state
   for img in "$LINUX_IMAGE" "$WIN_IMAGE" "$PKG_IMAGE"; do
@@ -436,7 +490,7 @@ $APP_TAG_CHECK"
       [ -z "$only" ] || [ "$only" = "$n" ] || continue
       printf '\n---------- build %s ----------\n' "$n"
       set +e
-      if [ "$n" = linux_x86_64 ]; then app_build_linux "$tag"; else app_build_windows "$tag"; fi
+      if [ "$n" = linux_x86_64 ]; then app_build_linux "$tag"; else app_build_windows "$tag" "$no_sign"; fi
       rc=$?
       set -e
       if [ "$rc" -ne 0 ]; then failed=1; echo "##[error]build $n failed"; continue; fi
@@ -698,8 +752,17 @@ release_main() {
   case "$cmd" in
     core|aligners|app|server)
       local dry=0
-      case "${1:-}" in '') ;; --dry-run) dry=1; shift ;; *) usage ;; esac
-      [ $# -eq 0 ] || usage
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --dry-run) dry=1; shift ;;
+          --require-authenticode) [ "$cmd" = app ] || usage; APP_REQUIRE_AUTHENTICODE=1; shift ;;
+          *) usage ;;
+        esac
+      done
+      # Before release-please creates the release, not after the chained builds.
+      if [ "$APP_REQUIRE_AUTHENTICODE" = 1 ] && [ ! -d "$AUTHENTICODE_KEYS" ]; then
+        die "--require-authenticode: no Authenticode key in $AUTHENTICODE_KEYS (docs/local-ci.md)"
+      fi
       cmd_release "$cmd" "$dry"
       ;;
     binaries)
@@ -713,6 +776,7 @@ release_main() {
           --only) [ $# -ge 2 ] || usage; only=$2; shift 2 ;;
           --src) [ $# -ge 2 ] || usage; src=$(realpath -e "$2") || die "--src: no such directory: $2"; shift 2 ;;
           --no-sign) no_sign=1; shift ;;
+          --require-authenticode) APP_REQUIRE_AUTHENTICODE=1; shift ;;
           *) usage ;;
         esac
       done
@@ -724,7 +788,7 @@ release_main() {
           APP_SRC=$src cmd_binaries_app "$tag" "$no_upload" "$out" "$only" "$no_sign"
           ;;
         server)
-          [ -z "$only$src" ] && [ "$no_sign" = 0 ] || usage
+          [ -z "$only$src" ] && [ "$no_sign" = 0 ] && [ "$APP_REQUIRE_AUTHENTICODE" = 0 ] || usage
           cmd_binaries_server "$tag" "$no_upload" "$out"
           ;;
         *) usage ;;

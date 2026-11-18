@@ -103,8 +103,8 @@ REDACTED
 ## `scripts/release-local.sh`
 
 ```sh
-scripts/release-local.sh <core|aligners|app|server> [--dry-run]
-scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only linux_x86_64|windows_x86_64|installers] [--src DIR] [--no-sign]
+scripts/release-local.sh <core|aligners|app|server> [--dry-run] [--require-authenticode]   # the flag: app only
+scripts/release-local.sh binaries <app|server> <tag> [--no-upload] [--out DIR] [--only linux_x86_64|windows_x86_64|installers] [--src DIR] [--no-sign] [--require-authenticode]
 scripts/release-local.sh image server <tag> [--no-push]
 scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
 ```
@@ -169,6 +169,48 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 - The rpm and the Flatpak commit are signed with the release GPG key. The script exports the key from `~/.config/dentalcraft-release/gpg` (fingerprint `83B0A31C…9DE538`; `DENTALCRAFT_RELEASE_KEYS` overrides the directory) into a 0600 file under the cache. It mounts that file read-only into the container and deletes it afterwards. On the runner the key comes from the `DENTALCRAFT_GPG_KEY` secret.
 - First it checks that `packaging/linux/dentalcraft.list` and `dentalcraft.repo` (installed by the deb and the rpm) are byte-identical to `dentalcraft-web/linux/`.
 
+**Authenticode (Windows):** `packaging/windows/authenticode.sh` of the tag signs the Windows files with the DentalCraft **self-signed** code-signing certificate.
+- **What it gives:** Windows does not trust a self-signed certificate. SmartScreen still warns ("Windows protected your PC"), and the publisher shows as unknown. The signature only proves which key signed the files: users can check the certificate's SHA-256 fingerprint, printed in the release notes. A PC that installs the certificate as trusted accepts the signature (see "Trusting the self-signed certificate on a Windows PC" in `dentalcraft-app/packaging/README.md`). The SSL.com eSigner version (an OV/IV certificate that Windows trusts) is parked: see `docs/plan/HANDOFF.md`.
+- **The certificate:** `CN=DentalCraft (self-signed), O=VITI DANIELE, C=IT`, RSA 3072, SHA-256, KU digitalSignature, EKU codeSigning, CA:FALSE, valid 2026-11-18 to 2031-11-18.
+  - SHA-256 fingerprint `24DD542E337BCEA99C793D57DE53B6D355DC015BF1270D20D1321D56DCF0AA26`.
+  - The public certificate is pinned in `dentalcraft-app/packaging/windows/dentalcraft-selfsigned.crt.pem`. Replacing the key means replacing that file in the same change.
+- **Tools:**
+  - jsign 7.6 (`--storetype PKCS12`), the jar pinned by URL (Maven Central) and sha256;
+  - an RFC 3161 timestamp from `http://ts.ssl.com`;
+  - `osslsigncode verify` for the check.
+  - The script installs Java and osslsigncode with dnf or apt-get, only when there is a key.
+- **Order:** every signature comes before `update.json`, `update.json.minisig` and the checksums, which hash the signed files.
+  1. Job `build`, entry `windows_x86_64`, step "Sign the Windows programs": `dentalcraft.exe` and `dentalcraft-cli.exe` in `target/`, after Build and before Package. The zip, setup.exe and MSI therefore all hold signed programs.
+  2. Job `installers`, step "Sign the Windows installers": `DentalCraft-<V>-setup.exe` and `DentalCraft-<V>-x86_64.msi`, in another throwaway `fedora:45` container after `installers.sh`.
+  - `--replace` keeps a single signature when a rerun finds a `target/` program that is already signed.
+- **Verification:** after signing, every file must pass `osslsigncode verify` with:
+  - `Signature verification: ok`;
+  - `Timestamp Server Signature verification: ok`;
+  - exactly one signature.
+  - The signature must chain to the pinned self-signed certificate (`AUTHENTICODE_CAFILE` overrides it, for tests with another key). The timestamp must chain to `packaging/windows/timestamp-root.pem`: SSL.com Root Certification Authority RSA (`85666A562EE0BE5CE925C1D8890A6F76A87EC16D4D7D5F29EA7419CF20123B69`), the root of the ts.ssl.com timestamps, from the [SSL.com repository](https://www.ssl.com/repository/) and also in Fedora's `objsign-ca-bundle.pem`. Windows trusts that root, so the timestamp is valid on Windows too.
+  - osslsigncode alone exits 0 even when the timestamp fails, which is why the script checks those lines.
+  - To check a downloaded file by hand:
+
+    ```sh
+    osslsigncode verify -in DentalCraft-<V>-setup.exe \
+      -CAfile dentalcraft-app/packaging/windows/dentalcraft-selfsigned.crt.pem \
+      -TSA-CAfile dentalcraft-app/packaging/windows/timestamp-root.pem
+    ```
+
+    On Windows: file Properties, Digital Signatures, or `Get-AuthenticodeSignature` (the signature shows as not trusted unless the certificate is installed).
+- **The key:** `~/.config/dentalcraft-release/authenticode/` (`DENTALCRAFT_RELEASE_KEYS` overrides the parent directory), mode 0700:
+  - `dentalcraft-selfsigned.p12` (0600): PKCS#12 with the key and the certificate, alias `dentalcraft`;
+  - `storepass` (0600): its password, without a trailing newline;
+  - `dentalcraft-selfsigned.crt.pem` and `dentalcraft-selfsigned.cer` (0644): the public certificate, PEM and DER (the `.cer` is the file to install on Windows PCs).
+  - The script mounts the directory read-only into the signing containers as `AUTHENTICODE_KEY_DIR`. jsign reads the password with `--storepass file:`, so it is never on a command line or in the log.
+  - A directory that is present but lacks the `.p12` or `storepass` fails the run.
+  - On the runner the same key comes from the optional secrets `DENTALCRAFT_AUTHENTICODE_P12` (the `.p12`, base64) and `DENTALCRAFT_AUTHENTICODE_PASSWORD`. Each step writes them as 0600 files into a 0700 directory under `$RUNNER_TEMP` and deletes it afterwards.
+- **Without a key** (no directory, or no secrets on the runner), each step prints `##[warning]no Authenticode key …` and the files stay unsigned: the behaviour before Authenticode. `--require-authenticode` turns this into a failure:
+  - `release-local.sh app --require-authenticode` checks before release-please runs;
+  - `binaries app … --require-authenticode` checks before building, and `authenticode.sh` checks again with `AUTHENTICODE_REQUIRED=1`.
+- **Release notes:** when `setup.exe` carries a signature (a non-empty PE certificate table), the `<!-- binaries-note -->` step says that the Windows files carry a self-signed signature that Windows does not trust, so SmartScreen still warns, and prints the certificate's SHA-256 fingerprint (computed from the pinned `.crt.pem`). Otherwise it keeps the "not code-signed" line.
+- **Testing:** run `bash packaging/windows/authenticode.sh FILE...` in a `fedora:45` container with the key directory mounted read-only and `AUTHENTICODE_KEY_DIR` set, as `release-local.sh` does.
+
 **Attach to release** (job `release`, on its own checkout of the tag):
 - `packaging/update-manifest.py` writes and signs `update.json` and `update.json.minisig`, with the minisign key `~/.config/dentalcraft-release/minisign.key` standing in for the `DENTALCRAFT_MINISIGN_KEY` secret.
 - It requires the 8 assets (2 archives, 6 installers) plus the manifest, and nothing else. Then it writes `dentalcraft_<version>_SHA256SUMS.txt`.
@@ -182,9 +224,10 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 - `--only installers` reruns the installers job on the two archives of the last run of the same tag.
 - `--no-upload` stops before the upload. The assets stay in `~/.cache/dentalcraft-ci/app-binaries/dist`.
 - `--out DIR` copies the assets to DIR.
+- `--require-authenticode` fails instead of leaving the Windows files unsigned when `~/.config/dentalcraft-release/authenticode` is missing (see Authenticode above).
 - Local tests only, both need `--no-upload`:
   - `--src DIR` builds a local working tree instead of the tag: its HEAD commit plus the uncommitted changes, untracked files included, ignored ones not. It is built outside the superproject, so core and aligners are the pinned tags. Example: `scripts/release-local.sh binaries app v0.2.0-alpha.90 --no-upload --src dentalcraft-app`.
-  - `--no-sign` builds without the release keys: the rpm and the Flatpak bundle are unsigned and there is no `update.json`.
+  - `--no-sign` builds without the release keys: the rpm and the Flatpak bundle are unsigned, there is no `update.json`, and there is no Authenticode signature (the key directory is not mounted, so the Windows files stay unsigned with the warning). Test builds then fetch no timestamps. `--no-sign` and `--require-authenticode` exclude each other.
 
 ### `binaries server` (`dentalcraft-server/.github/workflows/binaries.yml`)
 
