@@ -314,6 +314,25 @@ Branch `feat/setup-alignment` of `dentalcraft-aligners` and `dentalcraft-app` (w
 - `feat/port-b0` in core, aligners and app: old port work, local only.
 - No longer parked: `fix/model-stamps` (`03be70d`) and `wip/standard-export` (`04e471b`) are in `feat/production` of `dentalcraft-aligners` (2026-11-14, not committed yet): the model stamps kept, the Standard aligners 1 of the golden arches pass the print check.
 
+## Parked: Windows code signing with SSL.com eSigner (apply only when the user asks)
+
+- **Now:** every release signs the Windows programs and installers with a self-signed certificate (decision of 2026-11-18). The key is in `~/.config/dentalcraft-release/authenticode/`, SHA-256 fingerprint `24DD542E…DCF0AA26`. Windows does not trust it: SmartScreen still warns and the publisher shows as unknown. The release notes print the fingerprint. Details: `docs/local-ci.md` (Authenticode) and `dentalcraft-app/packaging/README.md` (how to trust the certificate on a Windows PC).
+- **History:**
+  - Azure Artifact Signing was tried and dropped on 2026-11-18.
+  - SSL.com eSigner was chosen: an OV certificate (~$129, 1 year) plus eSigner Tier 1 (~$180/year, 240 signings). OV if SSL.com accepts the ditta individuale, otherwise IV.
+  - The eSigner version was written (helper, workflow, `release-local.sh`, docs), then parked: self-signed for now. It has never signed with a real SSL.com certificate.
+- **Where:** `~/.config/dentalcraft-release/parked/authenticode-esigner/`, not committed:
+  - `dentalcraft-app.patch` and `superproject.patch` go from the self-signed version to the eSigner one, `git apply` in each repository;
+  - `README.md`: how to apply, the `esigner.env` contract, the sandbox test, the pinned SSL.com roots.
+  - The Italian step-by-step guide `docs/windows-code-signing.md` comes back with `superproject.patch`.
+- **User steps before applying:**
+  1. Ask SSL.com support whether OV can be issued to the ditta individuale (otherwise IV).
+  2. Buy the certificate and eSigner Tier 1.
+  3. Complete the validation.
+  4. Enroll eSigner with **OTP APP** and save the `secret code` shown with the QR code.
+  5. Fill `~/.config/dentalcraft-release/esigner.env` (0600): `ESIGNER_USERNAME`, `ESIGNER_PASSWORD`, `ESIGNER_CREDENTIAL_ID`, `ESIGNER_TOTP_SECRET`.
+- **Gap (both versions):** the NSIS uninstaller `uninstall.exe`, written by the setup at install time, is not signed.
+
 ## Open items (still valid from wave 1)
 
 - **Golden harness.** Teeth3DS is CC BY-NC-ND: keep it out of the repositories (`$DC_TEETH3DS`). Real scans for tests are in `datasets/development/arcate_singole_T10` (gitignored, read-only).
