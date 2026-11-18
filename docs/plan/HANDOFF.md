@@ -6,7 +6,24 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-18 evening, diagnostics, Windows scanner, signed Windows release)
+## Resume here (2026-11-18 night, scan reliability: NOT released yet)
+
+User report: calibration did not work, scanning was very slow and unreliable, lost the object, the test piece could not be scanned; the scanner LEDs blinked. Work is on branch `fix/scan-reliability` of `dentalcraft-core` and `dentalcraft-app` (pushed, not merged, not released).
+
+- **Root causes (measured on the rig, `docs/scanner/`):** turntable tilt speed values < 40 refused by the firmware (`ERR=007`) so calibration died at step 0; tilt wait model 6× too long; calibration turning ~7°/frame at 2.74 fps; frames arrive ~0.8 s late and the table angle was read at arrival; residual gate 0.2 mm below real noise; 20 mm jump limit; a lost frame was lost forever; ICP locked on the static scene and still said OK; `scan.auto` said "Done" with 4/49 frames; the view never re-framed the object; Full mode streamed IR for nothing.
+- **Core (`fix/scan-reliability`):** tracking with prior-relative checks, Tukey + degeneracy guard, recovery through lost frames, static-lock detection; angle history at capture time (scanner latency 800 ms); stop-and-capture `scan.auto` (default when calibrated: 10° steps, settle, median of 3 frames, pose from the table, constrained ICP, loop closure, clutter removal) with a quality report; `turntable.calibrate` rewritten (24×15° stops, background removal, pairwise registration, axis fit, validation with error codes); accepted tilt speeds only; depth-only stream; newest frame; fill light (see below).
+- **App (`fix/scan-reliability`):** the popup keeps the object framed; stop-and-capture by default with step/frames controls; calibration residuals, pairs and gain, and the scan quality report shown; slower default turn (8°/s); new Fluent codes EN+IT.
+- **Live results on the test piece:** calibration 101 s, 24/24 pairs, 1.63°/1.28 mm; `scan.auto` 1 tilt 122 s, 37/37 stops, 0.276 mm, loop −0.01°; 2 tilts 250 s, 74/74 stops, 0.289 mm, 305k points, one clean horseshoe. ICP refinement is mostly refused on real frames (geometry not quite metric: no factory calibration); the table pose is exact and carries the scan.
+- **Fill light (user decision 21:31, tested live):** UVC XU unit 4 selector 7, only the ON/OFF lines; on while streaming (97.0% valid pixels, 19 µm noise vs 92.8%, 27 µm off), off otherwise, so the LEDs no longer blink. Linux only.
+- **Vendor tiers T1–T3 (user approval 21:43, supervised session):**
+  - T1: firmware `v4.1.54.20260203|v31.7.1.0203`; XU selector 3 = live exposure in µs.
+  - T2: factory calibration read through the XU file-read channel (open-for-read, read, 60-zero close frame only): rectified left pinhole fx = fy = 1142.37, cx = 163.19, cy = 329.85, baseline 88.42 mm (our FOV estimate was 1190 / centre). Replay on real data: pairwise rotation RMS 1.68° → 0.23°, fused residual 0.278 → 0.112 mm, loop error −0.37° → −0.07°, the slow continuous spin tracks 263/263 frames (was lost at ~25°). Loaded at connect when no user calibration file exists, cached under `<data_dir>/dentalcraft/revopoint-usb/factory/<serial>/`.
+  - T3: manual exposure profile `0x912 0`, `0x911 6000`, `0x910 8000` → 6.76 fps (was 2.74), piece coverage 96–99%, pixel noise 21 µm (17), static ICP 0.05 mm (0.075); a 360° spin at 10°/s tracks 294/294. `0xa05 6` has no effect; AE mode `0x912 1` is not deterministic. Setting `fast_exposure`. The registers stay set until the scanner is replugged (the factory AE mode cannot be read back).
+  - Never: file writes, firmware, factory calibration writes, serial, HID, any line outside the closed enums; never run Revo Scan's calibration (it overwrites the factory file).
+- **Data (not committed):** `/var/tmp/dc-scan-data` (datasets, results, README), tools in `/var/tmp/dc-scratch`.
+- **Next:** the user tests the release build from the branch; then merge, release (core, aligners pin, app, web) per the usual flow.
+
+## 2026-11-18 evening, diagnostics, Windows scanner, signed Windows release
 
 Released on the evening of 2026-11-18 through the local CI and release flow. Latest app: **`v0.2.0-alpha.10`**, the first with signed Windows files.
 
