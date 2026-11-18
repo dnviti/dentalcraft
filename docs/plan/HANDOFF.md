@@ -6,16 +6,19 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-18 evening, diagnostics and Windows scanner)
+## Resume here (2026-11-18 evening, diagnostics, Windows scanner, signed Windows release)
 
-Released on the evening of 2026-11-18 through the local CI and release flow:
+Released on the evening of 2026-11-18 through the local CI and release flow. Latest app: **`v0.2.0-alpha.10`**, the first with signed Windows files.
+
+- **Signed Windows release** (user request "rilasciare l'applicazione firmata"): `dentalcraft-app` `v0.2.0-alpha.10` (PR #28, release PR #29) signs `dentalcraft.exe`, `dentalcraft-cli.exe`, `setup.exe` and the MSI with Authenticode: self-signed certificate `CN=DentalCraft (self-signed)`, SHA-256 `24DD542E337BCEA99C793D57DE53B6D355DC015BF1270D20D1321D56DCF0AA26`, valid to 2031-11-18, timestamped by SSL.com (`packaging/windows/authenticode.sh`, `binaries.yml`; superproject `26a3d68` `release-local.sh` and `docs/local-ci.md`). Run `release-local.sh app --require-authenticode`. Verified on the published files: signature, timestamp and fingerprint ok, SHA256SUMS and `update.json` match the signed files. SmartScreen still warns (not a public CA); the NSIS `uninstall.exe` is not signed. Site: signature text with the fingerprint and What's new (PR #10, `619f48d`).
 
 - **Opt-in anonymous diagnostics** (user request):
 REDACTED
   - `dentalcraft-app` `v0.2.0-alpha.8` (PR #24, release PR #25): crate `dc-diagnostics` (sanitizer, queue in `<data>/diagnostics/queue`, sender, tracing layer for ERROR and `diag = true` WARN, crash pickup, session event), first-start consent dialog (unticked; `consent.rs`), account-menu checkbox, Support "Show what is sent", commands `app.diagnostics.{status,set,preview,send}` (bridge and CLI). Nothing is collected without consent; turning it off deletes the queue and the install id. The EULA was left unchanged (user decision: it only excludes sending projects and scans).
 - **Windows scanner** (user report: Windows did not see the MINI 2): `revopoint-usb` was a stub outside Linux. `dentalcraft-core` `v0.3.0-alpha.5` (PR #17, release PR #18) adds Media Foundation capture (`revopoint_usb/{device,linux,win,mf}.rs`, MF DLLs loaded at run time) and stops rejecting frame headers on word 4, which is not constant (IMU and timestamps were dropped on every platform). Verified on the real scanner on Linux (two rounds with restart) and in the `Windows VM` VM (`scan.*` session: 38 frames fused, 20718 points). `dentalcraft-aligners` `v0.2.0-alpha.9` (PR #19, release PR #20) and `dentalcraft-app` `v0.2.0-alpha.9` (PR #26, release PR #27) only move to it.
 - `dentalcraft-web`: alpha.8 content (privacy, FAQ 13, What's new; PR #8, `REDACTED-REVISION`), then alpha.9 (Windows scanner).
-- Windows binaries stay unsigned in these releases: they were built with the committed `release-local.sh`, because another session's uncommitted Authenticode edit (see "Parked: Windows code signing") was in the working tree.
+- Windows binaries of alpha.8 and alpha.9 are unsigned (built with the committed `release-local.sh` while the Authenticode edit was still uncommitted); alpha.10 is signed.
+- The old local-only branches (`feat/find-teeth`, `feat/port-b0`, `feat/scan-import` in core, aligners and app; `fix/model-stamps`, `wip/standard-export` in aligners) are now also on origin, as backups; main is unchanged.
 
 Open:
 1. Stop → restart of the scanner on a physical Windows PC (the VM needs a manual USB re-attach after the device re-enumerates). Repeated libvirt attach/detach hung the scanner once; only a physical replug recovered it.
@@ -125,9 +128,9 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 | --- | --- | --- |
 | `dentalcraft-core` | `v0.3.0-alpha.5` | Windows capture of the MINI 2 through Media Foundation; frame header word 4 no longer checked (PR #17, release PR #18, 2026-11-18). Previous `v0.3.0-alpha.4`: `dc-module-api` scanner declaration for modules (PR #15, release PR #16); `v0.3.0-alpha.3`: in-app 3D scanner connector (alpha) (PR #12, release PR #13, 2026-11-17) |
 | `dentalcraft-aligners` | `v0.2.0-alpha.9` | move to core `v0.3.0-alpha.5` (PR #19, release PR #20, 2026-11-18). Previous `v0.2.0-alpha.8`: scanner roles on import-scans (PR #17, release PR #18) |
-| `dentalcraft-app` | `v0.2.0-alpha.9` | move to core `v0.3.0-alpha.5` (Windows scanner) (PR #26, release PR #27, 2026-11-18). Previous `v0.2.0-alpha.8`: opt-in anonymous diagnostics (PR #24, release PR #25); `v0.2.0-alpha.7`: generic scan popup, scanning at project start (PR #22, release PR #23). All 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39; Windows unsigned |
+| `dentalcraft-app` | `v0.2.0-alpha.10` | Windows programs and installers signed with Authenticode (self-signed, fingerprint `24DD542E…DCF0AA26`) (PR #28, release PR #29, 2026-11-18). Previous `v0.2.0-alpha.9`: move to core `v0.3.0-alpha.5` (Windows scanner) (PR #26, release PR #27); `v0.2.0-alpha.8`: opt-in anonymous diagnostics (PR #24, release PR #25); `v0.2.0-alpha.7`: generic scan popup, scanning at project start (PR #22, release PR #23). All 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
 | `dentalcraft-server` | `v0.6.0` | anonymous diagnostics ingest, admin pages, MCP endpoint (PR #15, release PR #16, 2026-11-18); live as `REDACTED-REVISION` |
-| `dentalcraft-web` | none (`main`) | no release-please; content and downloads for `0.2.0-alpha.9` (Windows scanner) on top of `0.2.0-alpha.8` (diagnostics, PR #8, `a4b70d9`) |
+| `dentalcraft-web` | none (`main` `619f48d`) | no release-please; signed Windows downloads and What's new for `0.2.0-alpha.10` (PR #10), on top of `0.2.0-alpha.9` (Windows scanner, PR #9) and `0.2.0-alpha.8` (diagnostics, PR #8) |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
