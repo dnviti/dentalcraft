@@ -44,7 +44,7 @@ This superproject has no code and no version. It pins four private submodules (o
 | --- | --- | --- |
 | `dentalcraft-core` | Rust | `dc-mesh`, `dc-geom`, `dc-case`, `dc-command`, `dc-jobs`, `dc-scene`, `dc-project`, `dc-module-api`, `dc-i18n`, `dc-theme`. Headless engine. |
 | `dentalcraft-aligners` | Rust | `dca-model`, `dca-algo` (one file per pipeline stage), `dca-module`. Module id `aligners`, display name "Aligners" / "Allineatori". Depends on core. |
-| `dentalcraft-app` | Rust | `dc-app` (shell, screens), `dc-ui` (widgets, tokens), `dc-viewport`, `dc-workspace`, `dc-auth-client`. Depends on core and aligners. |
+| `dentalcraft-app` | Rust | `dc-app` (shell, screens), `dc-ui` (widgets, tokens), `dc-viewport`, `dc-workspace`, `dc-scan-ui` (generic scan popup, hosted by any screen or module), `dc-auth-client`. Depends on core and aligners. |
 REDACTED
 
 Superproject folders: `docs/plan` (plan, decisions, handoff), `docs/adr`, `docs/design` (`tokens.json`, `ui-spec.md`, `screens/`, FigCraft file), `docs/screenshots`, `.cargo/config.toml`.

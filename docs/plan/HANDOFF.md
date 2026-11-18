@@ -1,4 +1,4 @@
-# Handoff, 2026-11-17
+# Handoff, 2026-11-18
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -6,7 +6,20 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-17 evening, Kani release)
+## Resume here (2026-11-18, scanning at project start)
+
+Released on 2026-11-18 through the local CI and release flow (feature: the user asked to scan at project start, so that a new project is not blocked without STL files, and to make the scan popup generic for the whole app and its modules):
+
+- `dentalcraft-core` `v0.3.0-alpha.4` (PR #15, release PR #16): `dc-module-api` `ScannerInput { roles }`, `MenuItem.scanner`, `MenuItem::with_scanner`; a module declares on its import-scans leaf that it accepts the 3D scanner and which roles. It also ships the Kani harnesses of PR #14.
+- `dentalcraft-aligners` `v0.2.0-alpha.8` (PR #17, release PR #18): move to core `v0.3.0-alpha.4`; `aligners.case.import-scans` declares Upper, Lower and Bite.
+- `dentalcraft-app` `v0.2.0-alpha.7` (PR #22, release PR #23): new crate `dc-scan-ui`, the generic scan popup. It does not depend on `dc-workspace` or any module; it runs its own jobs, and each `ScanOutput` owns its temp file until the host drops it. `dc-workspace/src/scan.rs` is now a thin host. Fluent keys `ws-scan-*` / `ws-tt-*` became `scan-*` / `turntable-*` in `dc-scan-ui`. New project screen: "Scan" beside "Browse files…"; scanned meshes join the scan list with their role and Create imports them. A project can be created with no scans; the workspace then opens on its empty state (Import, Scan). The Scan button shows only where the module declares `scanner`. All 11 assets, glibc ≤ 2.39, notices regenerated (new crate `tempfile`, MIT).
+- Server: nothing due (dry-run: no user-facing commits).
+- `dentalcraft-web` `main` `d11f02b` (PR #7): content (statuses, FAQ 12 "start without scans", What's new) and downloads for `0.2.0-alpha.7`. Live on the hosting platform as revision `REDACTED-REVISION` since 2026-11-18 15:04 (image `sha-d11f02b`, REDACTED); checked live: `/en/`, `/it/`, downloads, `/update/stable.json`, apt/rpm repos, msi size. The REDACTED service quota is REDACTED again: the next site rollout must wait for REDACTED or needs a decision first.
+- Not checked by eye in the window; no manual test with the real scanner from the New project screen yet.
+
+Next, in order: items 1 and 2 of the 2026-11-17 section below are still open.
+
+## 2026-11-17 evening, Kani release
 
 Next, in order:
 1. **Build/release pipeline overhaul** (user request 2026-11-17 23:01): the best possible build and release pipeline.
@@ -93,11 +106,11 @@ Branch `feat/teeth-components` of `dentalcraft-aligners` and `dentalcraft-app` (
 
 | Submodule | Tag | Notes |
 | --- | --- | --- |
-| `dentalcraft-core` | `v0.3.0-alpha.3` | in-app 3D scanner connector (alpha): `dc-scanner` (sim, `revopoint-usb` V4L2 without vendor SDK, runtime-loaded `revopoint-sdk`; tracking, TSDF fusion, `ScanEditor`, `scan.*` / `turntable.*` / `scan.auto` commands, tool-free turntable axis calibration with ROI), `dc-ble` (pure-Rust BLE link: BlueZ over zbus, WinRT), `dc-turntable` (generic traits, sim, Revopoint dual-axis BLE), point clouds, TSDF, cloud meshing, hole filling and repair in `dc-mesh`/`dc-geom` (PR #12, release PR #13, 2026-11-17). `main` `1686bec` adds only the Kani proof harnesses (PR #14, `test`, no release) |
-| `dentalcraft-aligners` | `v0.2.0-alpha.7` | fixes found by Kani: days of wear validated 5..=21 in the schedule and export commands, stage day guarded against NaN, next visit on an empty calendar, order-independent seed change; 13 Kani harnesses (PR #15, release PR #16, 2026-11-17) |
-| `dentalcraft-app` | `v0.2.0-alpha.6` | week of a stage without overflow on the timeline, move to aligners `v0.2.0-alpha.7`; 3 Kani harnesses (PR #20, release PR #21, 2026-11-17); all 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
+| `dentalcraft-core` | `v0.3.0-alpha.4` | `dc-module-api` scanner declaration for modules (`ScannerInput`, `MenuItem.scanner`); Kani harnesses (PR #14) (PR #15, release PR #16, 2026-11-18). Previous `v0.3.0-alpha.3`: in-app 3D scanner connector (alpha): `dc-scanner`, `dc-ble`, `dc-turntable`, point clouds, TSDF, cloud meshing, hole filling and repair (PR #12, release PR #13, 2026-11-17) |
+| `dentalcraft-aligners` | `v0.2.0-alpha.8` | move to core `v0.3.0-alpha.4`; scanner roles Upper, Lower, Bite on import-scans (PR #17, release PR #18, 2026-11-18) |
+| `dentalcraft-app` | `v0.2.0-alpha.7` | generic scan popup `dc-scan-ui`, scanning on the New project screen, projects without scans (PR #22, release PR #23, 2026-11-18); all 8 formats, signed `update.json`, SHA256SUMS, glibc ≤ 2.39 |
 | `dentalcraft-server` | `v0.5.0` | `main` `cc6143e` adds only the source notice `LICENSE.md` (chore, no release) |
-| `dentalcraft-web` | none (`main` `8bd3499`) | no release-please; What's new for `0.2.0-alpha.6` (days-of-wear checks, fixes, Kani proofs) and its downloads (PR #6, 2026-11-17). Previous: scanning and turntable content, `0.2.0-alpha.5` (PR #5, image `sha-92cb559`) |
+| `dentalcraft-web` | none (`main` `d11f02b`) | no release-please; content, What's new and downloads for `0.2.0-alpha.7` (PR #7, image `sha-d11f02b`, 2026-11-18). Previous: `0.2.0-alpha.6` (PR #6, `8bd3499`) |
 
 The `.1` alphas include scan import and the simple left menu (six groups, eight steps; see `docs/design/ui-spec.md` section 6). The `.2` alphas (2026-11-08, through the local CI and release flow) add "Trova i denti" and "Denti 3D": the `feat/find-teeth` and `feat/teeth-3d` branches are merged into `main` and no longer the base of the work. The `feat/port-b0` branches of the earlier handoff are superseded by these tags. The `.3` alphas of aligners and app (2026-11-12) add "Separa denti e gengiva" and the licence.
 
