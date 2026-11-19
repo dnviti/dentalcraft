@@ -116,6 +116,7 @@ scripts/kani-local.sh <core|aligners|app|all> [--ref <git-ref>] [--dev] [-- <car
 | app | dc-workspace `timeline.rs` | `week_never_overflows` | `week` is exact, or `u32::MAX` when it does not fit |
 | app | dc-workspace `timeline.rs` | `step_stays_in_the_timeline` | For \|delta\| ≤ 5: stays in 0..=last, moves at most \|delta\|, no overflow |
 | app | dc-workspace `timeline.rs` | `tick_stops_at_the_last_stage` | Playback never passes the last stage and never overflows |
+| app | dc-ui `pacing.rs` | `frames_never_come_faster_than_the_cap` | A frame starts at least 1/60 s after the previous one (at most 60 fps); the wait is never longer than one interval |
 
 ## Known open findings
 
