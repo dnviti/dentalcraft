@@ -112,6 +112,7 @@ Internal path dependencies must not carry a `version =` requirement (release-ple
 - `egui` / `eframe` are pinned to `=0.37.0`; upgrade them together.
 - Core stays headless and testable without a GPU; modules depend only on core.
 - Never commit Teeth3DS data (`$DC_TEETH3DS`).
+- **Same behaviour on every platform (user rule, 2026-11-20, always):** every change, fix and feature must work the same on Linux, Windows and macOS. Linux is the development platform: what is done there is ported to Windows and macOS in the same piece of work, never left Linux-only (scanner, turntable, rendering, files, installers, everything). A platform-specific part (e.g. V4L2 vs Media Foundation) needs its equivalent on the other platforms before the work is done; verify on Windows in the `Windows VM` VM when real hardware is involved, and say plainly what could not be verified on a platform.
 
 ## UI conventions
 
