@@ -21,7 +21,7 @@ The first implementation of the aligner workflow is a Blender add-on (Python, `b
 
 ## Decision
 
-Option 3: DentalCraft is rewritten entirely in Rust, with no PyO3 bridge. The project format is `.dcprj`. The code is split in separate private repositories (engine, aligners module, application, Go backend) gathered by this superproject.
+Option 3: DentalCraft is rewritten entirely in Rust, with no PyO3 bridge. The project format is `.dcprj`. The code is split in separate repositories (engine, aligners module, application, website) gathered by this superproject. The Go sign-in backend is a separate closed repository. (At the time of this decision all repositories were private; the first four are now published as source-available.)
 
 ## Consequences
 

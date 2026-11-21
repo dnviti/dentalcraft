@@ -7,7 +7,7 @@
 #   scripts/ci-local.sh clean
 #
 #   core|aligners|app  dentalcraft-<repo>/.github/workflows/ci.yml
-#   server             dentalcraft-server/.github/workflows/ci.yml
+#   server             dentalcraft-server/.github/workflows/ci.yml (private repository, maintainer only; needs its checkout next to this one)
 #   super              .github/workflows/submodules.yml (superproject)
 #   all                super, core, aligners, app, server; stops at the first failure
 #   --ref <git-ref>    commit to test (default: HEAD of the repository, which must be clean)

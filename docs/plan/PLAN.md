@@ -8,7 +8,7 @@ Superproject `dentalcraft` (no code, no versioning): `.gitmodules`, `.github/wor
 | dentalcraft-core | Rust lib workspace | Engine (no app shell): geometry, case model, project I/O, commands, jobs, module API, scene description, i18n, theme |
 | dentalcraft-aligners | Rust lib workspace | First dental module, display "Aligners"/"Allineatori", id `aligners` |
 | dentalcraft-app | Rust bin workspace | Shipped product: eframe shell, wgpu viewport, auth client, packaging, regulatory dossier |
-| dentalcraft-server | Go | OIDC identity provider (+ later licensing, support tickets) |
+| dentalcraft-server | Go | OIDC identity provider (closed, private repository; not part of the public superproject) |
 
 Core headless (testable on CI without GPU). Modules depend only on core.
 
@@ -51,27 +51,22 @@ ZIP; first entry `mimetype` stored = `application/vnd.dentalcraft.project+zip`; 
 - Atomic save: `*.dcprj.tmp`, fsync, rename, keep one `.bak`.
 - Migrations chained on serde_json::Value per container (`format_version`) and per module (`schema_version`); newer → read-only; unknown module state kept opaque and written back, flagged in UI.
 
-## 3. dentalcraft-server (Go)
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
+## 3. Sign-in server (closed repository): the contract the app relies on
+The server itself is closed source and is not documented here. The desktop app (`dc-auth-client`) needs an OpenID Connect issuer with: `/.well-known/openid-configuration` (all endpoints on the issuer's origin), `/oauth/jwks.json`, `GET /oauth/authorize` (authorization code with PKCE S256 required; the redirect is a loopback `http://127.0.0.1:{any}/callback`, RFC 8252; `iss` in the redirect, RFC 9207; `ui_locales` en/it), `POST /oauth/token` (`authorization_code` and rotating `refresh_token`), `POST /oauth/revoke` (RFC 7009), and `GET /api/v1/me` (profile and `entitlements:{modules:["aligners"]}`). Public client id `dentalcraft-desktop`; id_token signed with EdDSA (Ed25519). Full list: README, "Sign-in server".
 Desktop flow: TcpListener 127.0.0.1:0 → system browser (webbrowser crate) with state, nonce, PKCE → one-shot callback page → exchange (reqwest/rustls) → verify id_token via cached JWKS → refresh token in keyring (service `dentalcraft`, account = issuer), access token in memory → silent refresh on start. Login optional for local work in v1.
 
 ## 4. Work packages
 Wave 1 (today):
-- WP1 Repos/CI (M): gh repo create --private ×5; per repo release-please, ci.yml (self-hosted runner; fmt, clippy -D warnings, test; Go vet/gofmt/test), release-please.yml, CODEOWNERS, rust-toolchain.toml 1.99.1, deps SSH step; superproject .gitmodules + submodules.yml.
+- WP1 Repos/CI (M): gh repo create ×5; per repo release-please, ci.yml (self-hosted runner; fmt, clippy -D warnings, test; Go vet/gofmt/test), release-please.yml, CODEOWNERS, rust-toolchain.toml 1.99.1, deps SSH step; superproject .gitmodules + submodules.yml.
 - WP2 Core API contracts (C): all public traits/types above with minimal working impls, rustdoc, UndoStack/StepHistory tests.
-- WP3 Go server skeleton (M): endpoints, memstore + sqlite, full PKCE flow test (httptest), refresh rotation + reuse detection, dev mode.
+- WP3 Sign-in server (M, closed repository): OIDC authorization code + PKCE flow, token rotation, dev mode.
 - WP4 Theme + i18n infra (S): dc-i18n with en/it key parity test; dc-theme tokens codegen.
 - WP5 Mesh I/O (M): STL ascii/bin, OBJ, PLY, unit fix, validation; round-trip tests.
 - WP6 .dcprj (M): writer/reader, blake3, atomic save, migration fixture; byte-identical round-trip; corruption detected.
 - WP7 Viewport (C): wgpu mesh pipeline, camera, picking, standard views; 300k tris 60 fps.
 - WP8 App shell (C): Home, Login, Support, Module chooser, Workspace (multi-level left menu, viewport, inspector, status/job bar), en/it switch; egui_kittest smoke over all screens both languages.
 - WP9 Aligners menu + stubs (M): full menu tree (mirror old ui_phases.py), stub commands "Not yet available"; en/it keys for every item.
-- WP10 Auth client (M): PKCE loopback, keyring, refresh; integration test vs `dentalcraft-server dev`.
+- WP10 Auth client (M): PKCE loopback, keyring, refresh; integration test against a development issuer.
 - WP11 Integration (C): Import→view→save/load .dcprj→reopen; release core v0.1.0, consumers to tag; superproject pointer bumps; screenshots in docs/.
 Wave 2 (core geometry, golden-validated): WP12 golden harness (old plugin headless Blender → JSON/.dcm fixtures), WP13 BVH/closest/ray, WP14 ICP, WP15 QEM, WP16 Liepa, WP17 PCG/harmonic, WP18 SDF.
 Wave 3: WP19 world frame/import, WP20 autoseed, WP21 segmentation, WP22 reconstruction, WP23 diagnosis, WP24 overlays/paint.

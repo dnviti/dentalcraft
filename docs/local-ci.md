@@ -1,6 +1,6 @@
 # Local CI and releases (GitHub Actions disabled)
 
-GitHub Actions are switched off on all six dentalcraft repositories (superproject, core, aligners, app, server, web) to save runner capacity. The workflow files under `.github/` stay as they are: they are suspended, not removed, and they remain the source of truth. The scripts in `scripts/` replay those workflows on this machine with the same commands, environment and versions, so a change behaves locally exactly as it would on the self-hosted runner.
+GitHub Actions are switched off on all six dentalcraft repositories (superproject, core, aligners, app, server, web) to save runner capacity. The workflow files under `.github/` stay as they are: they are suspended, not removed, and they remain the source of truth. The scripts in `scripts/` replay those workflows on this machine with the same commands, environment and versions, so a change behaves locally exactly as it would on the self-hosted runner. The server repository is closed and private; its steps are listed here only because the scripts drive it.
 
 In this mode you push to GitHub by hand and merge pull requests with `gh pr merge --squash --admin`.
 
@@ -98,7 +98,7 @@ scripts/pr-merge-local.sh <core|aligners|app|server|super|web> <pr-number> [--dr
 
 The merge fails if the PR moved after the test.
 
-REDACTED
+**Branch protection:** all repositories are public, except `dentalcraft-server`, which stays private. While the repositories were private on the free plan, `branches/main/protection`, `rulesets` and `rules/branches/main` all answered 403 ("Upgrade to GitHub Pro"), so no required status checks existed for `--admin` to bypass. On public repositories protection can exist; `--admin` is kept so the command works either way. The script prints the protection state before merging.
 
 ## `scripts/release-local.sh`
 
@@ -152,7 +152,7 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 **Source:** the tag is checked out from GitHub, not from the submodule. Each job has its own checkout (`~/.cache/dentalcraft-ci/app-binaries/<job>/src`) and the build entries their own `target/`.
 
 **Build entries** (job `build`): each runs in a throwaway container (`podman run --rm`, as root so that the files in the checkout stay yours), with your SSH agent socket mounted. rustup and the cargo registry are kept in `~/.cache/dentalcraft-ci/app-binaries/<entry>/{rustup,cargo-home}`, so a rerun does not download them again.
-- `linux_x86_64` runs in the runner image itself, `ghcr.io/actions/actions-runner@sha256:759a1d94…` (pinned by digest as in the self-hosted runner; Ubuntu 24.04, glibc 2.39), with the workflow's "Install C toolchain" step (apt). The binaries need glibc 2.39 at most, as on GitHub.
+- `linux_x86_64` runs in the runner image itself, `ghcr.io/actions/actions-runner@sha256:759a1d94…` (pinned by digest, as on the self-hosted runner; Ubuntu 24.04, glibc 2.39), with the workflow's "Install C toolchain" step (apt). The binaries need glibc 2.39 at most, as on GitHub.
   - Until 2026-11-15 this entry built on the Fedora 45 host. Those binaries needed glibc 2.44, so they ran only on the newest distributions, and not in the Flatpak runtime or on Debian 13.
   - A `target/` from such an earlier build is wiped once (marker `target/.dc-ci-image`).
 - `windows_x86_64` runs in `registry.fedoraproject.org/fedora:45`. It installs the workflow's dnf packages (`gcc make pkgconf-pkg-config mingw64-gcc zip`) plus `git-core openssh-clients`, rustup with 1.99.1 and `x86_64-pc-windows-gnu`, and writes the `insteadOf` and known_hosts setup to its own global git config and `~/.ssh`.
@@ -294,10 +294,3 @@ scripts/actions-status.sh off [--dry-run]   # cancel queued runs, then switch Ac
 - **Concurrency groups:** concurrency groups are replaced by a `flock` per tag or ref, so runs queue rather than run at the same time.
 - **Windows build and installers environment:** the Windows build and the installers job run in a Fedora 45 container, not on the runner image (the installers job uses that same container on the runner too). The toolchain is mingw-w64 GCC either way, and the target triple, flags and packaging are the same.
 - **Tag-push runs:** `ci.yml` also triggers on `v*` tags, but tags created by `GITHUB_TOKEN` never trigger it on GitHub. There is nothing to replay.
-
-## Known flaky test
-
-REDACTED
-- The test clock starts at the real `time.Now()` and is advanced by 3 s.
-- When a run starts within 3 s before a minute boundary, the per-minute rate-limit summary splits into two entries.
-- This is a test bug, not a local-CI difference: it can fail on the runner as well.

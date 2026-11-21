@@ -10,11 +10,11 @@ The user disabled GitHub Actions on every repo for performance. This replaces th
 - **CI is local and identical to the runners.** `scripts/ci-local.sh <repo|super|all> [--ref R] [--pr]` runs the exact workflow commands on a clean checkout of the committed ref, outside the superproject. Without `[patch]`, dependencies resolve to the pinned tags, as on the runner. A green dev build inside the superproject is not CI: never merge, release or call work done without a green `ci-local.sh` on the exact commit. A PR is tested with `--pr`, which uses the merge into `origin/main`, like `refs/pull/N/merge`.
 - **PRs and merges.** Work on `feat/*` / `fix/*`, push the branch and open the PR as before. Merge with `scripts/pr-merge-local.sh <repo> <pr>`: it runs the local CI on the PR head, then `gh pr merge --squash --admin --match-head-commit <sha>`. Squash titles are conventional commits, because release-please reads them.
 - **Versioning is the real release-please.** `scripts/release-local.sh <repo>` runs the release-please CLI version bundled by `release-please-action@v5`, with the repo config and manifest. Like the action, it runs `github-release` first, then `release-pr`. It refuses unless local `main` == `origin/main` and the local CI passed on that commit.
-  - Merging the release PR and re-running the script creates the tag and the GitHub release. It then runs the chained jobs locally: app binaries (linux on the host, windows in a throwaway podman container), and server binaries and ghcr image.
+  - Merging the release PR and re-running the script creates the tag and the GitHub release. It then runs the chained jobs locally: app binaries (linux on the host, windows in a throwaway podman container), and the container images of the website and of the closed server.
   - Never hand-edit versions, CHANGELOGs or manifests, and never create tags by hand.
 - **Push is manual and allowed** for this flow: feature branches, PR merges, release-please. Then bump the consumer pins and the superproject gitlinks as in the "Versioning workflow" below.
 - **Development loop.** Building and testing inside the superproject (with `[patch]`) stays the fast inner loop. Keep the per-crate gate (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`). Run `git checkout -- Cargo.lock` in a submodule before committing it.
-- **Priority.** Finish the application features by porting them from the Blender plugin `REDACTED-PATH`. That repo is read-only and is the oracle.
+- **Priority.** Finish the application features by porting them from the Blender add-on `blender-ortho-aligner` (private, read-only). It is the oracle.
 
 ## Feature order: one at a time
 
@@ -34,9 +34,9 @@ DentalCraft must ship `dentalcraft-cli` and an MCP server (`dentalcraft-cli mcp`
 
 ## What this is
 
-DentalCraft is a desktop application for digital dentistry, written in Rust. It replaces the Blender add-on at `REDACTED-PATH`, which stays read-only and is the oracle for algorithms and regulatory documents. Decision: [`docs/adr/0001-full-rewrite-in-rust.md`](docs/adr/0001-full-rewrite-in-rust.md). Plan: `docs/plan/PLAN.md`; `docs/plan/DECISIONS.md` overrides it.
+DentalCraft is a desktop application for digital dentistry, written in Rust. It replaces the Blender add-on `blender-ortho-aligner` (private, read-only), which is the oracle for algorithms and regulatory documents. Decision: [`docs/adr/0001-full-rust-rewrite.md`](docs/adr/0001-full-rust-rewrite.md). Plan: `docs/plan/PLAN.md`; `docs/plan/DECISIONS.md` overrides it.
 
-This superproject has no code and no version. It pins four private submodules (org `dnviti-personal-org`, tracking `main`).
+This superproject has no code and no version. It pins four submodules (`dentalcraft-core`, `dentalcraft-aligners`, `dentalcraft-app`, `dentalcraft-web`, tracking `main`). The sign-in server `dentalcraft-server` is closed and private: it is not a submodule of this repository.
 
 ## Repository and crate map
 
@@ -45,7 +45,7 @@ This superproject has no code and no version. It pins four private submodules (o
 | `dentalcraft-core` | Rust | `dc-mesh`, `dc-geom`, `dc-case`, `dc-command`, `dc-jobs`, `dc-scene`, `dc-project`, `dc-module-api`, `dc-i18n`, `dc-theme`. Headless engine. |
 | `dentalcraft-aligners` | Rust | `dca-model`, `dca-algo` (one file per pipeline stage), `dca-module`. Module id `aligners`, display name "Aligners" / "Allineatori". Depends on core. |
 | `dentalcraft-app` | Rust | `dc-app` (shell, screens), `dc-ui` (widgets, tokens), `dc-viewport`, `dc-workspace`, `dc-scan-ui` (generic scan popup, hosted by any screen or module), `dc-auth-client`. Depends on core and aligners. |
-REDACTED
+| `dentalcraft-web` | Node | The website, downloads and update feed (static EN/IT site, nginx image). |
 
 Superproject folders: `docs/plan` (plan, decisions, handoff), `docs/adr`, `docs/design` (`tokens.json`, `ui-spec.md`, `screens/`, FigCraft file), `docs/screenshots`, `.cargo/config.toml`.
 
@@ -55,18 +55,15 @@ Superproject folders: `docs/plan` (plan, decisions, handoff), `docs/adr`, `docs/
 export PATH="$HOME/.cargo/bin:$PATH"          # Rust 1.99.1, pinned per repo
 
 cd dentalcraft-app && cargo run -p dc-app --release   # the application
-REDACTED
 
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test   # per Rust repo
-go vet ./... && gofmt -l . && go test -race ./...                               # server
 ```
 
 Builds inside the superproject use sccache (`rustc-wrapper`) and the mold linker, set in `.cargo/config.toml` (Fedora: `sudo dnf install mold sccache`). `ci-local.sh` and `release-local.sh` build outside the superproject with a clean environment, so they never use them and stay identical to the runners. `sccache --show-stats` shows the cache hits.
 
-REDACTED
+Sign-in needs an OpenID Connect issuer (see the README, "Sign-in server"). `DC_AUTH_ISSUER` overrides the issuer the app uses. Maintainers run the closed server locally from its own repository.
 
-Auth integration test (off by default, needs the Go server):
-`cd dentalcraft-app && DC_AUTH_IT=1 cargo test -p dc-auth-client --test server_it -- --ignored --nocapture`.
+The auth integration test of `dc-auth-client` (`DC_AUTH_IT=1`, `--ignored`) needs that server and is a maintainer-only check.
 
 **After every change, build the release binaries locally so the user can test** (inside the superproject, so the `[patch]` working trees are included):
 `cd dentalcraft-app && cargo build --release --workspace --bins && git checkout -- Cargo.lock` → `target/release/dentalcraft` and `target/release/dentalcraft-cli`.
@@ -89,7 +86,7 @@ Building inside the superproject rewrites the submodule `Cargo.lock` with path s
      - the downloads (`build/pin-release.mjs`);
      - the feature content (`content/site.{en,it}.json`, `site.data.json` statuses), so every function released is described and its status (exists / in progress / planned) is true;
      - a "What's new" entry for the version.
-   - Then build, PR and merge, `scripts/release-local.sh web-image --ref main`, and the rollout of `dentalcraft-web` on the hosting platform.
+   - Then build, PR and merge, `scripts/release-local.sh web-image --ref main`, and the rollout of the website image.
    - A release is not done until the live site at https://dentalcraft.app shows the new version and its functions.
 
 Internal path dependencies must not carry a `version =` requirement (release-please would rewrite them and break the build). Release type: `simple` for Rust repos, `go` for the server; tags have no component prefix.
@@ -112,7 +109,7 @@ Internal path dependencies must not carry a `version =` requirement (release-ple
 - `egui` / `eframe` are pinned to `=0.37.0`; upgrade them together.
 - Core stays headless and testable without a GPU; modules depend only on core.
 - Never commit Teeth3DS data (`$DC_TEETH3DS`).
-- **Same behaviour on every platform (user rule, 2026-11-20, always):** every change, fix and feature must work the same on Linux, Windows and macOS. Linux is the development platform: what is done there is ported to Windows and macOS in the same piece of work, never left Linux-only (scanner, turntable, rendering, files, installers, everything). A platform-specific part (e.g. V4L2 vs Media Foundation) needs its equivalent on the other platforms before the work is done; verify on Windows in the `Windows VM` VM when real hardware is involved, and say plainly what could not be verified on a platform.
+- **Same behaviour on every platform (user rule, 2026-11-20, always):** every change, fix and feature must work the same on Linux, Windows and macOS. Linux is the development platform: what is done there is ported to Windows and macOS in the same piece of work, never left Linux-only (scanner, turntable, rendering, files, installers, everything). A platform-specific part (e.g. V4L2 vs Media Foundation) needs its equivalent on the other platforms before the work is done; verify on Windows in a Windows VM when real hardware is involved, and say plainly what could not be verified on a platform.
 
 ## UI conventions
 
