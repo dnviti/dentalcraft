@@ -131,8 +131,8 @@ DentalCraft is in **alpha**: screens, commands and the project format can still 
 | --- | --- | --- |
 | `dentalcraft-core` | v0.3.0-alpha.8 | Engine, scanner and turntable drivers (Linux and Windows; macOS code is compile-checked only), resin print preparation for the Elegoo Saturn 4 Ultra 16K (alpha). |
 | `dentalcraft-aligners` | v0.2.0-alpha.12 | *Aligners* module. Case, preparation and diagnosis work; planning and production are in development; print tracking of the aligners. |
-| `dentalcraft-app` | v0.2.0-alpha.13 | Application with installers for Linux and Windows and automatic updates; Settings with a simple interface by default; print window for the aligners (alpha). |
-| `dentalcraft-web` | no release | Website and downloads for 0.2.0-alpha.12. |
+| `dentalcraft-app` | v0.2.0-alpha.14 | Application with installers for Linux and Windows and automatic updates; Settings with a simple interface by default; print window for the aligners (alpha). |
+| `dentalcraft-web` | no release | Website and downloads for 0.2.0-alpha.14. |
 
 Other modules (model builder, splint, crown and bridge, implant) are planned. They have no dates.
 
