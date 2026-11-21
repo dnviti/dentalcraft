@@ -36,15 +36,19 @@ DentalCraft must ship `dentalcraft-cli` and an MCP server (`dentalcraft-cli mcp`
 
 DentalCraft is a desktop application for digital dentistry, written in Rust. It replaces the Blender add-on `blender-ortho-aligner` (private, read-only), which is the oracle for algorithms and regulatory documents. Decision: [`docs/adr/0001-full-rust-rewrite.md`](docs/adr/0001-full-rust-rewrite.md). Plan: `docs/plan/PLAN.md`; `docs/plan/DECISIONS.md` overrides it.
 
-This superproject has no code and no version. It pins four submodules (`dentalcraft-core`, `dentalcraft-aligners`, `dentalcraft-app`, `dentalcraft-web`, tracking `main`). The sign-in server `dentalcraft-server` is closed and private: it is not a submodule of this repository.
+This superproject has no code and no version. It pins four submodules (`dentalcraft-core`, `dentalcraft-aligners`, `dentalcraft-app`, `dentalcraft-web`, tracking `main`).
+
+- **Repositories.** Public, under `github.com/dnviti`: this superproject, `dentalcraft-core`, `dentalcraft-aligners`, `dentalcraft-app`, `dentalcraft-web` and `dentalcraft-docs` (the documentation, not a submodule).
+- **Licence.** Source-available under the PolyForm Noncommercial License 1.0.0 (`LICENSE.md` in every public repository): noncommercial use only, not open source in the OSI sense.
+- **Server.** The sign-in server `dentalcraft-server` is closed and private, in the organisation `dnviti-personal-org`: it is not a submodule of this repository, and the licence above does not cover it.
 
 ## Repository and crate map
 
 | Submodule | Lang | Crates / content |
 | --- | --- | --- |
-| `dentalcraft-core` | Rust | `dc-mesh`, `dc-geom`, `dc-case`, `dc-command`, `dc-jobs`, `dc-scene`, `dc-project`, `dc-module-api`, `dc-i18n`, `dc-theme`. Headless engine. |
+| `dentalcraft-core` | Rust | `dc-mesh`, `dc-geom`, `dc-case`, `dc-command`, `dc-jobs`, `dc-scene`, `dc-project`, `dc-module-api`, `dc-i18n`, `dc-theme`, `dc-session`, `dc-mcp`, `dc-raster`, `dc-scanner`, `dc-turntable`, `dc-ble`, `dc-print` (resin printing). Headless engine. |
 | `dentalcraft-aligners` | Rust | `dca-model`, `dca-algo` (one file per pipeline stage), `dca-module`. Module id `aligners`, display name "Aligners" / "Allineatori". Depends on core. |
-| `dentalcraft-app` | Rust | `dc-app` (shell, screens), `dc-ui` (widgets, tokens), `dc-viewport`, `dc-workspace`, `dc-scan-ui` (generic scan popup, hosted by any screen or module), `dc-auth-client`. Depends on core and aligners. |
+| `dentalcraft-app` | Rust | `dc-app` (shell, screens, Settings dialog), `dc-ui` (widgets, tokens), `dc-viewport`, `dc-workspace`, `dc-scan-ui` (generic scan popup, hosted by any screen or module), `dc-print-ui` (generic print popup), `dc-auth-client`. Depends on core and aligners. |
 | `dentalcraft-web` | Node | The website, downloads and update feed (static EN/IT site, nginx image). |
 
 Superproject folders: `docs/plan` (plan, decisions, handoff), `docs/adr`, `docs/design` (`tokens.json`, `ui-spec.md`, `screens/`, FigCraft file), `docs/screenshots`, `.cargo/config.toml`.
@@ -88,6 +92,10 @@ Building inside the superproject rewrites the submodule `Cargo.lock` with path s
      - a "What's new" entry for the version.
    - Then build, PR and merge, `scripts/release-local.sh web-image --ref main`, and the rollout of the website image.
    - A release is not done until the live site at https://dentalcraft.app shows the new version and its functions.
+7. **Documentation with every release (user rule, 2026-11-21, always):**
+   - Regenerate [`github.com/dnviti/dentalcraft-docs`](https://github.com/dnviti/dentalcraft-docs) so it describes the released version: user manual, developer guide, architecture and sources, in English and Italian, as Markdown plus DOCX/PDF built with the ArtCraft suite (`tools/build.py`).
+   - Then PR and merge there; GitHub Pages serves it at https://dnviti.github.io/dentalcraft-docs/.
+   - A release is not done until the docs match.
 
 Internal path dependencies must not carry a `version =` requirement (release-please would rewrite them and break the build). Release type: `simple` for Rust repos, `go` for the server; tags have no component prefix.
 

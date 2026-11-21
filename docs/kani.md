@@ -113,6 +113,8 @@ scripts/kani-local.sh <core|aligners|app|all> [--ref <git-ref>] [--dev] [-- <car
 | aligners | dca-algo `rotation.rs` | `canonical_takes_the_short_way` | Canonical quaternion has w ≥ 0 (no 360° spin); result is q or −q. Discrete unit quaternions |
 | aligners | dca-model `state.rs` | `every_tooth_is_in_exactly_one_arch` | Every valid tooth is in exactly one of Upper and Lower, never Bite |
 | aligners | dca-model `state.rs` | `set_arch_seeds_reports_a_change_iff_the_seeds_differ` | "Changed" is true exactly when old and new seeds differ as multisets |
+| aligners | dca-model `print.rs` | `printed_only_by_the_user_or_the_printer` | An aligner becomes printed only by the user's confirmation (from any status but printed) or by the printer's report on a job it was sent; the app alone never marks one printed |
+| aligners | dca-model `print.rs` | `a_printed_aligner_leaves_only_for_a_reprint_by_the_user` | A printed aligner leaves printed only when the user asks to print it again |
 | app | dc-workspace `timeline.rs` | `week_never_overflows` | `week` is exact, or `u32::MAX` when it does not fit |
 | app | dc-workspace `timeline.rs` | `step_stays_in_the_timeline` | For \|delta\| ≤ 5: stays in 0..=last, moves at most \|delta\|, no overflow |
 | app | dc-workspace `timeline.rs` | `tick_stops_at_the_last_stage` | Playback never passes the last stage and never overflows |
@@ -132,3 +134,9 @@ scripts/kani-local.sh <core|aligners|app|all> [--ref <git-ref>] [--dev] [-- <car
 - **Not reachable with Kani, needs proptest:** `UndoStack` and `StepHistory` (`HashMap`
   syscall), the `ModuleCodec` migration chain, `valid_module_id`, `clear_arch`,
   `numbering_sequence`, and the JSON round trip of `AlignersState`.
+- **GOO run round trip** (core, `dc-print` `goo/rle.rs`): one run of any length 1..=`MAX_RUN`
+  and any value encodes and decodes to itself. The Kani harness did not finish (still running
+  after 17 minutes at 3.6 GB; split by the number of length bytes, just as slow): the encoder's
+  flush loop and the chunk byte loop are unrolled over a buffer of symbolic length, as in the
+  DCM1 decode. Sampled by the proptest `any_run_round_trips`; the unit test
+  `every_length_class_uses_the_fewest_bytes` covers the edges of every length class.
