@@ -17,6 +17,9 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# The public repositories live under the maintainer's account; only the closed
+# dentalcraft-server stays in the private organisation.
+OWNER=dnviti
 ORG=dnviti-personal-org
 
 usage() { sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
@@ -32,7 +35,10 @@ case "$repo" in
   core|aligners|app|server|web) name=dentalcraft-$repo; dir=$ROOT/dentalcraft-$repo ;;
   *) usage ;;
 esac
-R="$ORG/$name"
+case "$repo" in
+  server) R="$ORG/$name" ;;
+  *) R="$OWNER/$name" ;;
+esac
 
 IFS=$'\t' read -r state base head_ref head_sha author is_bot cross title < <(
   gh pr view "$n" -R "$R" --json state,baseRefName,headRefName,headRefOid,author,isCrossRepository,title \

@@ -38,7 +38,7 @@ Core headless (testable on CI without GPU). Modules depend only on core.
 Deps constraints: eframe `wgpu` feature, winit dlopen; `rfd` xdg-portal; `keyring` async-secret-service (pure Rust zbus); reqwest rustls with `ring` (aws-lc needs cmake); no C++ crates.
 
 ### 1.1 Cross-submodule Cargo deps
-Consumers: `dc-x = { git = "https://github.com/dnviti-personal-org/dentalcraft-core.git", tag = "vX.Y.Z" }` (`branch="main"` until core v0.1.0). Superproject `.cargo/config.toml`: `[patch."https://github.com/dnviti-personal-org/dentalcraft-core.git"]` path overrides for every crate (and same for aligners) + `net.git-fetch-with-cli = true` → local builds inside the superproject use working trees; standalone CI builds against tags/branch. Cargo.lock committed; CI lock-guard fails if any dc-*/dca-* lock entry lacks a `git+` source; agents `git checkout -- Cargo.lock` before committing if only dc-* entries changed.
+Consumers: `dc-x = { git = "https://github.com/dnviti/dentalcraft-core.git", tag = "vX.Y.Z" }` (`branch="main"` until core v0.1.0; `dnviti-personal-org` before the 2026-11-21 move). Superproject `.cargo/config.toml`: `[patch."https://github.com/dnviti/dentalcraft-core.git"]` path overrides for every crate (and same for aligners) + `net.git-fetch-with-cli = true` → local builds inside the superproject use working trees; standalone CI builds against tags/branch. Cargo.lock committed; CI lock-guard fails if any dc-*/dca-* lock entry lacks a `git+` source; agents `git checkout -- Cargo.lock` before committing if only dc-* entries changed.
 
 ## 2. `.dcprj` v1
 ZIP; first entry `mimetype` stored = `application/vnd.dentalcraft.project+zip`; JSON deflate, blobs zstd.

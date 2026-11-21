@@ -51,7 +51,7 @@ scripts/ci-local.sh clean
 - `CARGO_INCREMENTAL=0` and `CARGO_TERM_COLOR=always` are set, as `dtolnay/rust-toolchain` sets them.
 - Aligners and app also get the job env `CARGO_NET_GIT_FETCH_WITH_CLI=true`.
 - The step "Use SSH for private dentalcraft repositories" is replayed with process-scoped variables:
-  - `GIT_CONFIG_COUNT/KEY_0/VALUE_0` carry the `https://github.com/dnviti-personal-org/` to `git@github.com:dnviti-personal-org/` `insteadOf` mapping.
+  - `GIT_CONFIG_COUNT/KEY_0/VALUE_0` carry the `https://github.com/dnviti-personal-org/` to `git@github.com:dnviti-personal-org/` `insteadOf` mapping, as the workflows still write it. The public repositories under `github.com/dnviti` do not match it and are fetched over plain HTTPS.
   - `GIT_SSH_COMMAND` uses a known_hosts file that holds only GitHub's pinned ed25519 key.
   - Your SSH agent stands in for the deploy keys.
 
@@ -128,11 +128,13 @@ scripts/release-local.sh web-image [--ref <main|vX.Y.Z>] [--no-push]
 **What it runs:** the same two calls as the action, in the same order, against the default branch:
 
 ```sh
-release-please github-release --repo-url dnviti-personal-org/<repo> --config-file release-please-config.json --manifest-file .release-please-manifest.json --token "$(gh auth token)"
+release-please github-release --repo-url dnviti/<repo> --config-file release-please-config.json --manifest-file .release-please-manifest.json --token "$(gh auth token)"
 release-please release-pr     (same flags)
 ```
 
 The config and the manifest are read from `main` on GitHub, as the action reads them.
+
+**Repository owners:** since 2026-11-21 the public repositories (superproject, core, aligners, app, web) live under `github.com/dnviti`; the closed `dentalcraft-server` and its ghcr image stay in the `dnviti-personal-org` organisation. The scripts keep the two apart: `ORG` (private organisation, in `ci-local.sh`) and `OWNER` (public account, in `release-local.sh`, `pr-merge-local.sh` and `actions-status.sh`). `--repo-url` is `dnviti/<repo>`, except `dnviti-personal-org/dentalcraft-server`.
 
 **Chained jobs:**
 - `release_created`/`tag_name` are derived by comparing the release tags before and after `github-release`.
@@ -247,6 +249,8 @@ scripts/third-party-notices.py dentalcraft-app -o dentalcraft-app/THIRD-PARTY-NO
 | `ghcr.io/dnviti-personal-org/dentalcraft-server` | `:<version>`, `:latest` | `VERSION` | `source`, `version`, `revision` (= tag commit) |
 | `ghcr.io/dnviti-personal-org/dentalcraft-web` | `:latest`, `:sha-<7>`, plus `:<version>` for a `v*` ref | none; build secret `gpg` | `version` = version or commit sha |
 
+The web image stays at `ghcr.io/dnviti-personal-org/dentalcraft-web`, which the deployed site pulls. The web `image.yml` derives the owner from the repository, so after the move to `dnviti` it would push `ghcr.io/dnviti/dentalcraft-web`: move the deployment before re-enabling that workflow.
+
 **Login and push:**
 - The script logs in to ghcr.io with `gh auth token`, through a temporary `--authfile` that it deletes afterwards.
 - Pushing needs the `write:packages` scope. The script checks for it and otherwise tells you to run `gh auth refresh -h github.com -s write:packages`.
@@ -271,7 +275,7 @@ scripts/actions-status.sh off [--dry-run]   # cancel queued runs, then switch Ac
 ```
 
 **How Actions were switched off:**
-- The switch is at repository level (`gh api repos/<org>/<repo>/actions/permissions`, `enabled=false`).
+- The switch is at repository level (`gh api repos/<owner>/<repo>/actions/permissions`, `enabled=false`).
 - All workflows are still `active`.
 
 **What the scripts change:**

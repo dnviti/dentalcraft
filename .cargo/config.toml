@@ -18,6 +18,28 @@ git-fetch-with-cli = true
 
 # Local path overrides: builds inside the superproject use the working trees of
 # the submodules instead of the git revisions pinned by the consumers.
+[patch."https://github.com/dnviti/dentalcraft-core.git"]
+dc-mesh = { path = "dentalcraft-core/crates/dc-mesh" }
+dc-geom = { path = "dentalcraft-core/crates/dc-geom" }
+dc-case = { path = "dentalcraft-core/crates/dc-case" }
+dc-command = { path = "dentalcraft-core/crates/dc-command" }
+dc-jobs = { path = "dentalcraft-core/crates/dc-jobs" }
+dc-scene = { path = "dentalcraft-core/crates/dc-scene" }
+dc-project = { path = "dentalcraft-core/crates/dc-project" }
+dc-module-api = { path = "dentalcraft-core/crates/dc-module-api" }
+dc-i18n = { path = "dentalcraft-core/crates/dc-i18n" }
+dc-theme = { path = "dentalcraft-core/crates/dc-theme" }
+dc-session = { path = "dentalcraft-core/crates/dc-session" }
+dc-mcp = { path = "dentalcraft-core/crates/dc-mcp" }
+dc-raster = { path = "dentalcraft-core/crates/dc-raster" }
+dc-scanner = { path = "dentalcraft-core/crates/dc-scanner" }
+dc-ble = { path = "dentalcraft-core/crates/dc-ble" }
+dc-turntable = { path = "dentalcraft-core/crates/dc-turntable" }
+
+# dentalcraft-app keeps core at the old organisation URL until it moves to an
+# aligners release that pins core at github.com/dnviti: both URLs point to the
+# same working tree, so the app builds one copy of each dc-* crate. Remove this
+# section when the app's Cargo.toml no longer names dnviti-personal-org.
 [patch."https://github.com/dnviti-personal-org/dentalcraft-core.git"]
 dc-mesh = { path = "dentalcraft-core/crates/dc-mesh" }
 dc-geom = { path = "dentalcraft-core/crates/dc-geom" }
@@ -36,7 +58,7 @@ dc-scanner = { path = "dentalcraft-core/crates/dc-scanner" }
 dc-ble = { path = "dentalcraft-core/crates/dc-ble" }
 dc-turntable = { path = "dentalcraft-core/crates/dc-turntable" }
 
-[patch."https://github.com/dnviti-personal-org/dentalcraft-aligners.git"]
+[patch."https://github.com/dnviti/dentalcraft-aligners.git"]
 dca-model = { path = "dentalcraft-aligners/crates/dca-model" }
 dca-algo = { path = "dentalcraft-aligners/crates/dca-algo" }
 dca-module = { path = "dentalcraft-aligners/crates/dca-module" }

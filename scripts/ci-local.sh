@@ -28,6 +28,10 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 CACHE=${DC_CI_CACHE:-$HOME/.cache/dentalcraft-ci}
+# The private organisation: dentalcraft-server lives there, and the workflows'
+# "Use SSH for private dentalcraft repositories" insteadOf names it. The public
+# repositories moved to github.com/dnviti (release-local.sh, OWNER) and are
+# fetched over plain HTTPS.
 ORG=dnviti-personal-org
 # ci.yml: dtolnay/rust-toolchain@stable with toolchain: 1.99.1, components: rustfmt, clippy
 RUST_TOOLCHAIN=1.99.1

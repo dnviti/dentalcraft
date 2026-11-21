@@ -13,7 +13,11 @@
 # need admin access to the repositories through `gh`.
 set -euo pipefail
 
+# The public repositories live under the maintainer's account; only the closed
+# dentalcraft-server stays in the private organisation.
+OWNER=dnviti
 ORG=dnviti-personal-org
+gh_repo() { if [ "$1" = dentalcraft-server ]; then echo "$ORG/$1"; else echo "$OWNER/$1"; fi; }
 LIST="$(dirname "${BASH_SOURCE[0]}")/actions-state.tsv"
 
 usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
@@ -37,21 +41,21 @@ run() {
   fi
 }
 
-enabled_of() { gh api "repos/$ORG/$1/actions/permissions" --jq .enabled; }
+enabled_of() { gh api "repos/$(gh_repo "$1")/actions/permissions" --jq .enabled; }
 workflows_of() {
-  gh api "repos/$ORG/$1/actions/workflows" --jq '[.workflows[] | select(.state != "active") | "\(.path)=\(.state)"] | if length == 0 then "all active" else join(" ") end'
+  gh api "repos/$(gh_repo "$1")/actions/workflows" --jq '[.workflows[] | select(.state != "active") | "\(.path)=\(.state)"] | if length == 0 then "all active" else join(" ") end'
 }
 last_run_of() {
-  gh api "repos/$ORG/$1/actions/runs?per_page=1" --jq '.workflow_runs[0] | if . == null then "-" else "\(.created_at) \(.name) \(.conclusion // .status)" end'
+  gh api "repos/$(gh_repo "$1")/actions/runs?per_page=1" --jq '.workflow_runs[0] | if . == null then "-" else "\(.created_at) \(.name) \(.conclusion // .status)" end'
 }
 
 # Runs still waiting to start (not those already running), as the hosting platform's toggle does.
 cancel_queued() {
   local repo=$1 st rid
   for st in queued pending waiting requested; do
-    for rid in $(gh api --paginate "repos/$ORG/$repo/actions/runs?status=$st&per_page=100" --jq '.workflow_runs[].id'); do
+    for rid in $(gh api --paginate "repos/$(gh_repo "$repo")/actions/runs?status=$st&per_page=100" --jq '.workflow_runs[].id'); do
       echo "  cancelling run $rid ($st)"
-      run gh run cancel "$rid" -R "$ORG/$repo"
+      run gh run cancel "$rid" -R "$(gh_repo "$repo")"
     done
   done
 }
@@ -71,7 +75,7 @@ while IFS=$'\t' read -r repo orig _; do
   esac
   if [ "$before" != "$want" ]; then
     [ "$want" = false ] && cancel_queued "$repo"
-    run gh api -X PUT "repos/$ORG/$repo/actions/permissions" -F "enabled=$want" --silent
+    run gh api -X PUT "repos/$(gh_repo "$repo")/actions/permissions" -F "enabled=$want" --silent
   fi
   if [ "$mode" = status ]; then
     printf '%-22s %-9s %-9s %-20s %s\n' "$repo" "$orig" "$before" "$(workflows_of "$repo")" "$(last_run_of "$repo")"
