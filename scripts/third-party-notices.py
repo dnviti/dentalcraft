@@ -20,10 +20,11 @@ What it does
   * Runs `cargo metadata --format-version 1 --locked` per target and takes the
     closure of the roots over normal dependency edges (no dev or build-only deps:
     build dependencies are not linked into the shipped binaries).
-  * Drops the project's own crates (dc-*, dca-*; path or dnviti-personal-org git
-    sources) and lists every other crate with name, version, SPDX expression,
-    repository and the licence/notice files shipped in its source directory
-    (LICENSE*, COPYING*, NOTICE*, ...), identical texts printed once.
+  * Drops the project's own crates (dc-*, dca-*; path or github.com/dnviti git
+    sources, formerly dnviti-personal-org) and lists every other crate with name,
+    version, SPDX expression, repository and the licence/notice files shipped in
+    its source directory (LICENSE*, COPYING*, NOTICE*, ...), identical texts
+    printed once.
   * Adds the fonts and icons bundled under assets/ of the project's crates (the
     OFL / MIT files next to them).
   * Crates without a licence file get the text of their Apache-2.0 licence taken
@@ -53,7 +54,8 @@ from pathlib import Path
 STANDARD_TEXT_IDS = ("Apache-2.0", "BSL-1.0", "CC0-1.0", "MPL-2.0")
 DEFAULT_ROOTS = ["dc-app", "dc-cli"]
 DEFAULT_TARGETS = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-gnu"]
-OWN_SOURCE_MARKER = "dnviti-personal-org"
+# The DentalCraft git repositories: github.com/dnviti, formerly dnviti-personal-org.
+OWN_SOURCE = re.compile(r"github\.com/dnviti(-personal-org)?/dentalcraft-")
 
 LICENCE_FILE = re.compile(
     r"^(licen[cs]es?|copying|copyright|notice|unlicen[cs]e|authors?|patents)([-_.].*)?$", re.I
@@ -357,7 +359,7 @@ def lock_third_party(lock: Path) -> set:
         name = re.search(r'^name = "(.*)"', block, re.M)
         ver = re.search(r'^version = "(.*)"', block, re.M)
         src = re.search(r'^source = "(.*)"', block, re.M)
-        if name and ver and src and OWN_SOURCE_MARKER not in src.group(1):
+        if name and ver and src and not OWN_SOURCE.search(src.group(1)):
             out.add((name.group(1), ver.group(1), src.group(1)))
     return out
 
@@ -429,7 +431,7 @@ def closure(roots, nodes_by_target):
 
 def is_own(pkg) -> bool:
     src = pkg.get("source")
-    return src is None or OWN_SOURCE_MARKER in src
+    return src is None or OWN_SOURCE.search(src) is not None
 
 
 # Licence file collection -----------------------------------------------------

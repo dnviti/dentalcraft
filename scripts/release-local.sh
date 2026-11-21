@@ -64,7 +64,16 @@ APP_REQUIRE_AUTHENTICODE=0
 
 usage() { sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
-gh_repo() { printf '%s/dentalcraft-%s\n' "$ORG" "$1"; }
+# The public repositories live under the maintainer's account; only the closed
+# dentalcraft-server stays in the private organisation $ORG (ci-local.sh), with
+# its ghcr image. release-please gets its --repo-url from here.
+OWNER=dnviti
+gh_repo() {
+  case "$1" in
+    server) printf '%s/dentalcraft-server\n' "$ORG" ;;
+    *) printf '%s/dentalcraft-%s\n' "$OWNER" "$1" ;;
+  esac
+}
 
 # Only one run per tag at a time (the workflows' concurrency groups, not cancelled).
 lock() {
@@ -713,6 +722,9 @@ gh release download "$tag" -R "$repo" -D downloads
 ls -l downloads
 sha256sum downloads/*'
     unset GH_TOKEN
+    # image.yml derives the owner from the repository (dnviti since the move); the
+    # deployed site pulls ghcr.io/dnviti-personal-org/dentalcraft-web, so the image
+    # stays in the organisation.
     image="ghcr.io/$(printf '%s' "$ORG" | tr '[:upper:]' '[:lower:]')/dentalcraft-web"
     local tags=("$image:latest" "$image:sha-${sha::7}")
     version=$sha
