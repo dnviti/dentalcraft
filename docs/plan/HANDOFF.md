@@ -1,4 +1,4 @@
-# Handoff, 2026-11-22
+# Handoff, 2026-11-28
 
 Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECISIONS.md`](DECISIONS.md); port plan: [`PORT-PLAN.md`](PORT-PLAN.md). The day-2 notes ([`HANDOFF-2026-10-31.md`](HANDOFF-2026-10-31.md)) stay as history; their open issues 1 to 6 (standard export, stamps, bridges, shell speed, occlusion, trim) are still open and are parked, not current.
 
@@ -6,7 +6,17 @@ Current state and what to do next. Plan: [`PLAN.md`](PLAN.md); overrides: [`DECI
 
 From 2026-11-07, GitHub Actions are suspended (CLAUDE.md "Current mode", `docs/local-ci.md`). CI, PR merges and release-please run locally, and they must reproduce the runners exactly. Pushing manually is allowed. The `.github/` workflows stay in the repos, untouched, until the user re-enables Actions. Before this, the mode was local-only: the first public alpha (2026-11-01) was tagged and released, and later work stayed local.
 
-## Resume here (2026-11-22: removing scans, tolerant bite, bite scan not drawn, released)
+## Resume here (2026-11-28: aligner shape, final position, audit fixes, released)
+
+Released on 2026-11-28: core `v0.3.0-alpha.10` (PRs #31 to #34, release PR #35; released on 2026-11-24), aligners `v0.2.0-alpha.14` (PR #32, release PR #33), app `v0.2.0-alpha.16` (PR #42, release PR #43; 11 assets, Authenticode self-signed). Server `v0.6.1` was released on 2026-11-23 (diagnostics storage cap, access revoked on account actions, patched Go toolchain); production still runs `0.6.0`. Website `main` `ab27d16` (PRs #21, #22; image `sha-ab27d16`): downloads, functions and What's new for `0.2.0-alpha.16`. The rollout of the website image and of the server image on golgari is done by the maintainer and is a separate step; the docs repo follows.
+
+- **Aligner shape (user reports of 2026-11-24 and 2026-11-28):** the shell is formed on a model whose embrasures are filled (above and under the contact, across spaces up to 3 mm), so the wall goes straight from one crown to the next and never between two teeth or onto the papilla; the fill is tangent to the crowns near the contact only. With the smooth edge the border is straight at the equator of each crown, at least 2 mm from its gingival zenith and 1 mm above every papilla tip. `trim.recess_mm` takes effect (default 0). Module state schema 3 (older apps open the aligner state read-only).
+- **Final position:** every tooth aligned and no molar held by default (stored old defaults migrated); posterior teeth close the spaces mesially; the last tooth of each side never goes distally (`distal_max_mm`, advanced, 0) and keeps its height; each side makes its own room, the midline stays; no IPR on a contact open at rest; no therapy to derotate a premolar or a molar.
+- **Audit of 2026-11-22:** authenticated control bridge, staging limits on every path, collisions listed one by one, one arch has no bite, tunnels cut out of the 3D teeth, scans and study models as clean solids, print check agreeing with the export.
+- **Verified:** aligners suite 1011 tests, app suite 749, local CI on every merged commit; a copy of a real two-arch case exported whole (print check 58/58, thinnest wall 0.30 mm), the test piece 47/47. Not run for this release: Kani (`scripts/kani-local.sh`), Windows and macOS runs.
+- **Known debts (accepted by the user, to do next):** plan stability under label noise (demo family 121/384, fixture 27/64, real case 3/20 by teeth around the 0.1 mm move threshold); on the test piece with a missing 21 a tooth without room still shifts the midline and leaves one collision (a tooth should be brought into the arch only as far as the space allows); IPR that no stage needs is scheduled at the last stage; "Residual overlap" notes on almost every contact; thin tabs of shell behind the last molars; the equator is surveyed along the vertical only.
+
+## 2026-11-22: removing scans, tolerant bite, bite scan not drawn, released)
 
 Released on 2026-11-22: core `v0.3.0-alpha.9` (PR #29, release PR #30), aligners `v0.2.0-alpha.13` (PR #30, release PR #31), app `v0.2.0-alpha.15` (PR #40, release PR #41; 11 assets, Authenticode self-signed); the server is not part of this release (dry run: no commits since `v0.6.0`). Website `main` `bcbd570` (PR #20): downloads, functions and What's new for `0.2.0-alpha.15`, image `sha-bcbd570`; the rollout on golgari and the docs repo are separate steps of the release.
 
