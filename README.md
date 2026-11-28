@@ -114,7 +114,7 @@ git submodule update --remote --merge
 
 # Record the new pointers in this repository
 git add dentalcraft-core dentalcraft-aligners dentalcraft-app dentalcraft-web
-git commit -s -m "chore(submodule): dentalcraft-core a v0.3.0-alpha.9"
+git commit -s -m "chore(submodule): dentalcraft-core a v0.3.0-alpha.10"
 ```
 
 Pointer bumps are made by the maintainer and use the `chore(submodule): ...` prefix. Releases are cut inside each submodule by release-please (tags `vX.Y.Z`); this repository has no version.
@@ -129,10 +129,10 @@ DentalCraft is in **alpha**: screens, commands and the project format can still 
 
 | Repository | Release | State |
 | --- | --- | --- |
-| `dentalcraft-core` | v0.3.0-alpha.9 | Engine, scanner and turntable drivers (Linux and Windows; macOS code is compile-checked only), resin print preparation for the Elegoo Saturn 4 Ultra 16K (alpha), removal of a scan from the case. |
-| `dentalcraft-aligners` | v0.2.0-alpha.13 | *Aligners* module. Case, preparation and diagnosis work; planning and production are in development; print tracking of the aligners; partial and low-quality bite scans register "to review". |
-| `dentalcraft-app` | v0.2.0-alpha.15 | Application with installers for Linux and Windows and automatic updates; Settings with a simple interface by default; print window for the aligners (alpha); removing scans from the case; the bite scan is not drawn in the 3D view. |
-| `dentalcraft-web` | no release | Website and downloads for 0.2.0-alpha.15. |
+| `dentalcraft-core` | v0.3.0-alpha.10 | Engine, scanner and turntable drivers (Linux and Windows; macOS code is compile-checked only), resin print preparation for the Elegoo Saturn 4 Ultra 16K (alpha), removal of a scan from the case, unsafe saves refused, an import warning for a scan that could not be closed. |
+| `dentalcraft-aligners` | v0.2.0-alpha.14 | *Aligners* module. Case, preparation and diagnosis work; planning and production are in development: the final position aligns every tooth and closes the spaces, the aligner goes straight between the teeth with its border at the equator; print tracking of the aligners. |
+| `dentalcraft-app` | v0.2.0-alpha.16 | Application with installers for Linux and Windows and automatic updates; Settings with a simple interface by default; print window for the aligners (alpha); authenticated control bridge; one-arch cases without a bite. |
+| `dentalcraft-web` | no release | Website and downloads for 0.2.0-alpha.16. |
 
 Other modules (model builder, splint, crown and bridge, implant) are planned. They have no dates.
 
